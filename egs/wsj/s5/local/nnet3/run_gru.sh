@@ -14,7 +14,7 @@ train_stage=-10
 affix=
 common_egs_dir=
 
-# LSTM options
+# GRU options
 splice_indexes="-2,-1,0,1,2 0 0"
 gru_delay=" -1 -2 -3 "
 label_delay=5
