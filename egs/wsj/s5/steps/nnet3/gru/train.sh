@@ -5,7 +5,11 @@
 #           2013  Guoguo Chen
 #           2014  Vimal Manohar
 #           2014-2015  Vijayaditya Peddinti
+#           2016  Yiming Wang
 # Apache 2.0.
+
+# Gated Recurrent Unit(GRU) is a kind of recurrent neural network similar to LSTM, but faster and less likely to diverge than LSTM.
+# See http://arxiv.org/pdf/1512.02595v1.pdf for more info about the network.
 
 # Terminology:
 # sample - one input-output tuple, which is an input sequence and output sequence for GRU
@@ -65,7 +69,7 @@ chunk_width=20  # number of output labels in the sequence used to train an GRU
                 # Caution: if you double this you should halve --samples-per-iter.
 chunk_left_context=40  # number of steps used in the estimation of GRU state before prediction of the first label
 chunk_right_context=0  # number of steps used in the estimation of GRU state before prediction of the first label (usually used in bi-directional GRU case)
-gru_delay=5  # the gru output is used to predict the label with the specified delay
+label_delay=5  # the gru output is used to predict the label with the specified delay
 gru_delay=" -1 -2 -3 "  # the delay to be used in the recurrence of grus
                         # "-1 -2 -3" means the a three layer stacked GRU would use recurrence connections with
                         # delays -1, -2 and -3 at layer1 gru, layer2 gru and layer3 gru respectively

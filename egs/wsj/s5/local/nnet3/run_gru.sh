@@ -1,6 +1,8 @@
 #!/bin/bash
 
-# this is a basic gru script
+# this is a basic Gated Recurrent Unit(GRU) script. GRU is a kind of recurrent
+# neural network similar to LSTM, but faster and less likely to diverge than LSTM.
+# See http://arxiv.org/pdf/1512.02595v1.pdf for more info about the network.
 # GRU script runs for more epochs than the TDNN script
 # and each epoch takes twice the time
 

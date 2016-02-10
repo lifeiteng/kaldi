@@ -393,12 +393,14 @@ def AddLstmLayer(config_lines,
             'dimension':output_dim
             }
 
-# Equations that specify a GRU layer:
+# Equations that specify a Gated Recurrent Unit (GRU) layer
+# (according to Eqn. (10) in the paper http://arxiv.org/pdf/1512.02595v1.pdf,
+# except that we scale h(t-1) by r(t) prior to the appplication of Whh as standard GRUs):
 # input: x(t), output: h(t), recurrent connection: h(t)
 # r(t) = sigmoid(Wrx * x(t) + Wrh * h(t-1) + br)
 # z(t) = sigmoid(Wzx * x(t) + Wzh * h(t-1) + bz)
-# m(t) = tanh(Wmx * x(t) + Wmrh * (r(t) .* h(t-1)) +bm)
-# h(t) = z(t) .* m(t) + (1 - z(t)) .* h(t-1)
+# h_tilt(t) = tanh(Whx * x(t) + Whh * (r(t) .* h(t-1)) + bh)
+# h(t) = z(t) .* h_tilt(t) + (1 - z(t)) .* h(t-1)
 def AddGruLayer(config_lines,
                 name, input, recurrent_dim,
                 scale_minus_one_file, bias_one_file,
@@ -415,22 +417,26 @@ def AddGruLayer(config_lines,
 
     # Parameter Definitions W*(* replaced by - to have valid names)
     components.append("# Reset gate control: W_r-xh")
-    components.append("component name={0}_W_r-xh type=NaturalGradientAffineComponent input-dim={1} output-dim{2} {3}".format(name, input_dim + recurrent_dim, recurrent_dim, ng_affine_options))
+    components.append("component name={0}_W_r-xh type=NaturalGradientAffineComponent input-dim={1} output-dim={2} {3}".format(name, input_dim + recurrent_dim, recurrent_dim, ng_affine_options))
     components.append("# Update gate control: W_z-xh")
-    components.append("component name={0}_W_z-xh type=NaturalGradientAffineComponent input-dim={1} output-dim{2} {3}".format(name, input_dim + recurrent_dim, recurrent_dim, ng_affine_options))
-    components.append("# Current hidden output control: W_m-xrh")
-    components.append("component name={0}_W_m-xrh type=NaturalGradientAffineComponent input-dim={1} output-dim{2} {3}".format(name, input_dim + recurrent_dim, recurrent_dim, ng_affine_options))
+    components.append("component name={0}_W_z-xh type=NaturalGradientAffineComponent input-dim={1} output-dim={2} {3}".format(name, input_dim + recurrent_dim, recurrent_dim, ng_affine_options))
+    components.append("# Current hidden output control: W_h-xh")
+    components.append("component name={0}_W_h-xh type=NaturalGradientAffineComponent input-dim={1} output-dim={2} {3}".format(name, input_dim + recurrent_dim, recurrent_dim, ng_affine_options))
 
     components.append("# Defining the non-linearities")
     components.append("component name={0}_r type=SigmoidComponent dim={1}".format(name, recurrent_dim))
     components.append("component name={0}_z type=SigmoidComponent dim={1}".format(name, recurrent_dim))
-    components.append("component name={0}_m type=TanhComponent dim={1}".format(name, recurrent_dim))
+    components.append("component name={0}_h_tilt type=TanhComponent dim={1}".format(name, recurrent_dim))
 
     components.append("# Defining the hidden node computations")
     components.append("component name={0}_rh type=ElementwiseProductComponent input-dim={1} output-dim={2}".format(name, 2 * recurrent_dim, recurrent_dim))
     components.append("component name={0}_h1 type=ElementwiseProductComponent input-dim={1} output-dim={2}".format(name, 2 * recurrent_dim, recurrent_dim))
     components.append("component name={0}_h2 type=ElementwiseProductComponent input-dim={1} output-dim={2}".format(name, 2 * recurrent_dim, recurrent_dim))
     components.append("component name={0}_h type=ClipGradientComponent dim={1} clipping-threshold={2} norm-based-clipping={3} ".format(name, recurrent_dim, clipping_threshold, norm_based_clipping))
+
+    components.append("# Defining fixed scale/bias component for (1 - z_t)")
+    components.append("component name={0}_fixed_scale_minus_one type=FixedScaleComponent scales={1}".format(name, scale_minus_one_file))
+    components.append("component name={0}_fixed_bias_one type=FixedBiasComponent bias={1}".format(name, bias_one_file))
 
     component_nodes.append("# r_t")
     component_nodes.append("component-node name={0}_r1 component={0}_W_r-xh input=Append({1}, IfDefined(Offset({0}_h_t, {2})))".format(name, input_descriptor, gru_delay))
@@ -440,17 +446,17 @@ def AddGruLayer(config_lines,
     component_nodes.append("component-node name={0}_z1 component={0}_W_z-xh input=Append({1}, IfDefined(Offset({0}_h_t, {2})))".format(name, input_descriptor, gru_delay))
     component_nodes.append("component-node name={0}_z_t component={0}_z input={0}_z1".format(name))
 
-    component_nodes.append("# m_t")
-    component_nodes.append("component-node name={0}_rh_t component={0}_rh input=Append({0}_r_t, IfDefined(Offset({0}_h_t, {2})))".format(name, gru_delay))
-    component_nodes.append("component-node name={0}_m1 component={0}_W_m-xrh input=Append({1}, {0}_rh_t)".format(name, input_descriptor))
-    component_nodes.append("component-node name={0}_m_t component={0}_m input={0}_m1".format(name))
+    component_nodes.append("# h_tilt_t")
+    component_nodes.append("component-node name={0}_rh_t component={0}_rh input=Append({0}_r_t, IfDefined(Offset({0}_h_t, {1})))".format(name, gru_delay))
+    component_nodes.append("component-node name={0}_h_tilt1 component={0}_W_h-xh input=Append({1}, {0}_rh_t)".format(name, input_descriptor))
+    component_nodes.append("component-node name={0}_h_tilt_t component={0}_h_tilt input={0}_h_tilt1".format(name))
 
-    component_nodes.append("# h_t")
-    components.append('component name={0}_minus_z type=FixedScaleComponent scales={1}'.format(name, scale_minus_one_file))
-    components.append('component name={0}_one_minus_z type=FixedBiasComponent bias={1}'.format(name, bias_one_file))
-    component_nodes.append('component-node name={0}_minus_z_t component={0}_minus_z input={0}_z_t'.format(name))
-    component_nodes.append('component-node name={0}_one_minus_z_t component={0}_one_minus_z input={0}_minus_z_t'.format(name))
-    component_nodes.append("component-node name={0}_h1_t component={0}_h1 input=Append({0}_z_t, {0}_m_t)".format(name))
+    component_nodes.append("# The following two lines are to implement (1 - z_t)")
+    component_nodes.append("component-node name={0}_minus_z_t component={0}_fixed_scale_minus_one input={0}_z_t".format(name))
+    component_nodes.append("component-node name={0}_one_minus_z_t component={0}_fixed_bias_one input={0}_minus_z_t".format(name))
+
+    component_nodes.append("# h_t") 
+    component_nodes.append("component-node name={0}_h1_t component={0}_h1 input=Append({0}_z_t, {0}_h_tilt_t)".format(name))
     component_nodes.append("component-node name={0}_h2_t component={0}_h2 input=Append({0}_one_minus_z_t, IfDefined(Offset({0}_h_t, {1})))".format(name, gru_delay))
     component_nodes.append("component-node name={0}_h_t component={0}_h input=Sum({0}_h1_t, {0}_h2_t)".format(name))
 

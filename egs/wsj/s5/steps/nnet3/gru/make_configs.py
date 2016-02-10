@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+# Gated Recurrent Unit(GRU) is a kind of recurrent neural network similar to LSTM, but faster and less likely to diverge than LSTM.
+# See http://arxiv.org/pdf/1512.02595v1.pdf for more info about the network.
+
 from __future__ import print_function
 import os
 import argparse
@@ -198,7 +201,7 @@ if __name__ == "__main__":
     init_config_lines = copy.deepcopy(config_lines)
     init_config_lines['components'].insert(0, '# Config file for initializing neural network prior to')
     init_config_lines['components'].insert(0, '# preconditioning matrix computation')
-    nodes.AddOutputNode(init_config_lines, prev_layer_output)
+    nodes.AddOutputLayer(init_config_lines, prev_layer_output)
     config_files[args.config_dir + '/init.config'] = init_config_lines
 
     prev_layer_output = nodes.AddLdaLayer(config_lines, "L0", prev_layer_output, args.config_dir + '/lda.mat')
@@ -218,14 +221,14 @@ if __name__ == "__main__":
 			                                args.config_dir + '/scale_minus_one.vec', args.config_dir + '/bias_one.vec',
                                             args.clipping_threshold, args.norm_based_clipping, args.ng_affine_options, gru_delay = gru_delay[i][0])
         # make the intermediate config file for layerwise discriminative training
-        nodes.AddFinalLayer(config_lines, prev_layer_output, args.num_targets, args.ng_affine_options, args.label_delay, args.include_log_softmax)
+        nodes.AddFinalLayer(config_lines, prev_layer_output, args.num_targets, args.ng_affine_options, args.label_delay, include_log_softmax = args.include_log_softmax)
         config_files['{0}/layer{1}.config'.format(args.config_dir, i+1)] = config_lines
         config_lines = {'components':[], 'component-nodes':[]}
 
     for i in range(args.num_gru_layers, num_hidden_layers):
         prev_layer_output = nodes.AddAffRelNormLayer(config_lines, "L{0}".format(i+1), prev_layer_output, args.hidden_dim, args.ng_affine_options)
         # make the intermediate config file for layerwise discriminative training
-        nodes.AddFinalLayer(config_lines, prev_layer_output, args.num_targets, args.ng_affine_options, args.label_delay, args.include_log_softmax)
+        nodes.AddFinalLayer(config_lines, prev_layer_output, args.num_targets, args.ng_affine_options, args.label_delay, include_log_softmax = args.include_log_softmax)
         config_files['{0}/layer{1}.config'.format(args.config_dir, i+1)] = config_lines
         config_lines = {'components':[], 'component-nodes':[]}
 
