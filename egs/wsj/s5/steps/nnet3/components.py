@@ -393,13 +393,14 @@ def AddLstmLayer(config_lines,
             'dimension':output_dim
             }
 
+
 # Equations that specify a Gated Recurrent Unit (GRU) layer
 # (according to Eqn. (10) in the paper http://arxiv.org/pdf/1512.02595v1.pdf,
 # except that we scale h(t-1) by r(t) prior to the appplication of Whh as standard GRUs):
 # input: x(t), output: h(t), recurrent connection: h(t)
 # r(t) = sigmoid(Wrx * x(t) + Wrh * h(t-1) + br)
 # z(t) = sigmoid(Wzx * x(t) + Wzh * h(t-1) + bz)
-# h_tilt(t) = tanh(Whx * x(t) + Whh * (r(t) .* h(t-1)) + bh)
+# h_tilt(t) = tanh(Whx * x(t) + Whh * (r(t-1) .* h(t-1)) + bh)
 # h(t) = z(t) .* h_tilt(t) + (1 - z(t)) .* h(t-1)
 def AddGruLayer(config_lines,
                 name, input, recurrent_dim,
@@ -415,12 +416,12 @@ def AddGruLayer(config_lines,
     input_dim = input['dimension']
     name = name.strip()
 
-    # Parameter Definitions W*(* replaced by - to have valid names)
-    components.append("# Reset gate control: W_r-xh")
-    components.append("component name={0}_W_r-xh type=NaturalGradientAffineComponent input-dim={1} output-dim={2} {3}".format(name, input_dim + recurrent_dim, recurrent_dim, ng_affine_options))
-    components.append("# Update gate control: W_z-xh")
-    components.append("component name={0}_W_z-xh type=NaturalGradientAffineComponent input-dim={1} output-dim={2} {3}".format(name, input_dim + recurrent_dim, recurrent_dim, ng_affine_options))
-    components.append("# Current hidden output control: W_h-xh")
+    # Parameter Definitions of a single large affine matrix W_-xh for reset gate r(t) and update gate z(t)
+    components.append("# Define a large affine matrix for reset gate and update gate: W_-xh")
+    components.append("component name={0}_W_-xh type=NaturalGradientAffineComponent input-dim={1} output-dim={2} {3}".format(name, input_dim + recurrent_dim, 2 * recurrent_dim, ng_affine_options))
+
+    # Parameter Definitions W_h-xh
+    components.append("# Define the affine matrix for current hidden output control: W_h-xh")
     components.append("component name={0}_W_h-xh type=NaturalGradientAffineComponent input-dim={1} output-dim={2} {3}".format(name, input_dim + recurrent_dim, recurrent_dim, ng_affine_options))
 
     components.append("# Defining the non-linearities")
@@ -438,12 +439,15 @@ def AddGruLayer(config_lines,
     components.append("component name={0}_fixed_scale_minus_one type=FixedScaleComponent scales={1}".format(name, scale_minus_one_file))
     components.append("component name={0}_fixed_bias_one type=FixedBiasComponent bias={1}".format(name, bias_one_file))
 
+    component_nodes.append("# large affine transform")
+    component_nodes.append("component-node name={0}_large_affine component={0}_W_-xh input=Append({1}, IfDefined(Offset({0}_h_t, {2})))".format(name, input_descriptor, gru_delay))
+    
     component_nodes.append("# r_t")
-    component_nodes.append("component-node name={0}_r1 component={0}_W_r-xh input=Append({1}, IfDefined(Offset({0}_h_t, {2})))".format(name, input_descriptor, gru_delay))
+    component_nodes.append("dim-range-node name={0}_r1 input-node={0}_large_affine dim-offset=0 dim={1}".format(name, recurrent_dim))
     component_nodes.append("component-node name={0}_r_t component={0}_r input={0}_r1".format(name))
    
     component_nodes.append("# z_t")
-    component_nodes.append("component-node name={0}_z1 component={0}_W_z-xh input=Append({1}, IfDefined(Offset({0}_h_t, {2})))".format(name, input_descriptor, gru_delay))
+    component_nodes.append("dim-range-node name={0}_z1 input-node={0}_large_affine dim-offset={1} dim={2}".format(name, recurrent_dim, recurrent_dim))
     component_nodes.append("component-node name={0}_z_t component={0}_z input={0}_z1".format(name))
 
     component_nodes.append("# h_tilt_t")
@@ -467,4 +471,3 @@ def AddGruLayer(config_lines,
             'descriptor': output_descriptor,
             'dimension':output_dim
             }
-
