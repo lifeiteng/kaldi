@@ -400,7 +400,7 @@ def AddLstmLayer(config_lines,
 # input: x(t), output: h(t), recurrent connection: h(t)
 # r(t) = sigmoid(Wrx * x(t) + Wrh * h(t-1) + br)
 # z(t) = sigmoid(Wzx * x(t) + Wzh * h(t-1) + bz)
-# h_tilt(t) = tanh(Whx * x(t) + Whh * (r(t-1) .* h(t-1)) + bh)
+# h_tilt(t) = tanh(Whx * x(t) + Whh * (r(t) .* h(t-1)) + bh)
 # h(t) = z(t) .* h_tilt(t) + (1 - z(t)) .* h(t-1)
 def AddGruLayer(config_lines,
                 name, input, recurrent_dim,
