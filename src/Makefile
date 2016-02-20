@@ -7,9 +7,7 @@ SHELL := /bin/bash
 
 SUBDIRS = base matrix util feat tree thread gmm transform sgmm \
           fstext hmm lm decoder lat kws cudamatrix nnet \
-          bin fstbin gmmbin fgmmbin sgmmbin featbin \
-          nnetbin latbin sgmm2 sgmm2bin nnet2 nnet3 chain nnet3bin nnet2bin kwsbin \
-          ivector ivectorbin online2 online2bin lmbin chainbin
+          sgmm2 nnet2 nnet3 chain ivector online2
 
 MEMTESTDIRS = base matrix util feat tree thread gmm transform sgmm \
           fstext hmm lm decoder lat nnet kws chain \
@@ -31,7 +29,7 @@ include kaldi.mk
 # Reset the default goal, so that the all target will become default
 .DEFAULT_GOAL :=
 all: checkversion test_dependencies kaldi.mk mklibdir $(SUBDIRS)
-	-echo Done
+	ar -cru libkaldi.a  ./*/*.o && echo Done
 
 mklibdir:
 	test -d $(KALDILIBDIR) || mkdir $(KALDILIBDIR)
