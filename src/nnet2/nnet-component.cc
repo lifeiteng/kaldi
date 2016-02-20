@@ -1257,8 +1257,20 @@ void AffineComponent::Read(std::istream &is, bool binary) {
   // of how ReadNew() works.
   ExpectOneOrTwoTokens(is, binary, ostr_beg.str(), "<LearningRate>");
   ReadBasicType(is, binary, &learning_rate_);
-  ExpectToken(is, binary, "<LinearParams>");
-  linear_params_.Read(is, binary);
+
+  std::string tmp_tok;
+  ReadToken(is, binary, &tmp_tok);
+  if (tmp_tok == "<LinearParams>")
+    linear_params_.Read(is, binary);
+  else {
+    KALDI_ASSERT(tmp_tok == "<BiasLearningRate>");
+    BaseFloat tmp;
+    ReadBasicType(is, binary, &tmp);
+
+    ExpectToken(is, binary, "<LinearParams>");
+    linear_params_.Read(is, binary);
+  }
+
   ExpectToken(is, binary, "<BiasParams>");
   bias_params_.Read(is, binary);
   std::string tok;
@@ -1666,8 +1678,18 @@ void AffineComponentPreconditionedOnline::Read(std::istream &is, bool binary) {
   // of how ReadNew() works.
   ExpectOneOrTwoTokens(is, binary, ostr_beg.str(), "<LearningRate>");
   ReadBasicType(is, binary, &learning_rate_);
-  ExpectToken(is, binary, "<LinearParams>");
-  linear_params_.Read(is, binary);
+  std::string tmp_tok;
+  ReadToken(is, binary, &tmp_tok);
+  if (tmp_tok == "<LinearParams>")
+    linear_params_.Read(is, binary);
+  else {
+    KALDI_ASSERT(tmp_tok == "<BiasLearningRate>");
+    BaseFloat tmp;
+    ReadBasicType(is, binary, &tmp);
+
+    ExpectToken(is, binary, "<LinearParams>");
+    linear_params_.Read(is, binary);
+  }
   ExpectToken(is, binary, "<BiasParams>");
   bias_params_.Read(is, binary);
   std::string tok;
@@ -2171,8 +2193,20 @@ void BlockAffineComponent::Read(std::istream &is, bool binary) {
   ReadBasicType(is, binary, &learning_rate_);
   ExpectToken(is, binary, "<NumBlocks>");
   ReadBasicType(is, binary, &num_blocks_);
-  ExpectToken(is, binary, "<LinearParams>");
-  linear_params_.Read(is, binary);
+
+  std::string tmp_tok;
+  ReadToken(is, binary, &tmp_tok);
+  if (tmp_tok == "<LinearParams>")
+    linear_params_.Read(is, binary);
+  else {
+    KALDI_ASSERT(tmp_tok == "<BiasLearningRate>");
+    BaseFloat tmp;
+    ReadBasicType(is, binary, &tmp);
+
+    ExpectToken(is, binary, "<LinearParams>");
+    linear_params_.Read(is, binary);
+  }
+
   ExpectToken(is, binary, "<BiasParams>");
   bias_params_.Read(is, binary);
   ExpectToken(is, binary, "</BlockAffineComponent>");
