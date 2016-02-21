@@ -82,6 +82,8 @@ class DecodableNnet2Online: public DecodableInterface {
   
   /// Indices are one-based!  This is for compatibility with OpenFst.
   virtual int32 NumIndices() const { return trans_model_.NumTransitionIds(); }
+
+  virtual const std::vector<BaseFloat> &BestLogLikes();
   
  private:
 
@@ -112,6 +114,7 @@ class DecodableNnet2Online: public DecodableInterface {
   // at the time we called LogLikelihood(), and will never exceed
   // opts_.max_nnet_batch_size.
   Matrix<BaseFloat> scaled_loglikes_;
+  std::vector<BaseFloat> best_loglikes_;
 
   KALDI_DISALLOW_COPY_AND_ASSIGN(DecodableNnet2Online);
 };

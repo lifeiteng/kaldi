@@ -44,7 +44,9 @@ DecodableNnet2Online::DecodableNnet2Online(
   log_priors_.ApplyLog();
 }
 
-
+const std::vector<BaseFloat> &DecodableNnet2Online::BestLogLikes() {
+    return best_loglikes_;
+}
 
 BaseFloat DecodableNnet2Online::LogLikelihood(int32 frame, int32 index) {
   ComputeForFrame(frame);
@@ -139,6 +141,11 @@ void DecodableNnet2Online::ComputeForFrame(int32 frame) {
   cu_posteriors.Swap(&scaled_loglikes_);
 
   begin_frame_ = frame;
+  // update best loglikes
+  for (int32 i = 0; i < scaled_loglikes_.NumRows(); ++i) {
+    best_loglikes_.push_back(scaled_loglikes_.Row(i).Max());
+  }
+
 }
 
 } // namespace nnet2
