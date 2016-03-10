@@ -19,7 +19,8 @@ splice_indexes="-2,-1,0,1,2 0 0"
 gru_delay=" -1 -2 -3 "
 label_delay=5
 num_gru_layers=3
-recurrent_dim=1024
+recurrent_projection_dim=1024
+non_recurrent_projection_dim=512
 hidden_dim=1024
 chunk_width=20
 chunk_left_context=40
@@ -85,7 +86,8 @@ if [ $stage -le 8 ]; then
     --momentum $momentum \
     --cmd "$decode_cmd" \
     --num-gru-layers $num_gru_layers \
-    --recurrent-dim $recurrent_dim \
+    --recurrent-projection-dim $recurrent_projection_dim \
+    --non-recurrent-projection-dim $non_recurrent_projection_dim \
     --hidden-dim $hidden_dim \
     --chunk-width $chunk_width \
     --chunk-left-context $chunk_left_context \

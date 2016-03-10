@@ -20,18 +20,18 @@ def PrintConfig(file_name, config_lines):
     f.write("\n".join(config_lines['component-nodes'])+"\n")
     f.close()
 
-def WriteScaleMinusOne(file_name, recurrent_dim):
+def WriteScaleMinusOne(file_name, recurrent_projection_dim):
     f = open(file_name, 'w')
     f.write(" [ ")
-    for i in range(recurrent_dim):
+    for i in range(recurrent_projection_dim):
         f.write("-1 ")
     f.write("]\n")
     f.close()
 
-def WriteBiasOne(file_name, recurrent_dim):
+def WriteBiasOne(file_name, recurrent_projection_dim):
     f = open(file_name, 'w')
     f.write(" [ ")
-    for i in range(recurrent_dim):
+    for i in range(recurrent_projection_dim):
         f.write("1 ")
     f.write("]\n")
     f.close()
@@ -115,8 +115,10 @@ if __name__ == "__main__":
     # GRU options
     parser.add_argument("--num-gru-layers", type=int,
                         help="Number of GRU layers to be stacked", default=1)
-    parser.add_argument("--recurrent-dim", type=int,
-                        help="dimension of gru's recurrent node")
+    parser.add_argument("--recurrent-projection-dim", type=int,
+                        help="dimension of gru's recurrent projection node")
+    parser.add_argument("--non-recurrent-projection-dim", type=int,
+                        help="dimension of gru's non-recurrent projection node") 
     parser.add_argument("--hidden-dim", type=int,
                         help="dimension of fully-connected layers")
 
@@ -189,8 +191,8 @@ if __name__ == "__main__":
     # print('initial_right_context=' + str(splice_array[0][-1]), file=f)
     f.close()
 
-    WriteScaleMinusOne(args.config_dir + '/scale_minus_one.vec', args.recurrent_dim)
-    WriteBiasOne(args.config_dir + '/bias_one.vec', args.recurrent_dim)
+    WriteScaleMinusOne(args.config_dir + '/scale_minus_one.vec', args.recurrent_projection_dim)
+    WriteBiasOne(args.config_dir + '/bias_one.vec', args.recurrent_projection_dim)
 
     config_lines = {'components':[], 'component-nodes':[]}
 
@@ -208,16 +210,16 @@ if __name__ == "__main__":
 
     for i in range(args.num_gru_layers):
         if len(gru_delay[i]) == 2: # Birectional Gru layer case, add both forward and backward
-            prev_layer_output1 = nodes.AddGruLayer(config_lines, "BGru{0}_forward".format(i+1), prev_layer_output, args.recurrent_dim,
+            prev_layer_output1 = nodes.AddGruLayer(config_lines, "BGru{0}_forward".format(i+1), prev_layer_output, args.recurrent_projection_dim, args.non_recurrent_projection_dim,
                                             args.config_dir + '/scale_minus_one.vec', args.config_dir + '/bias_one.vec',
                                             args.clipping_threshold, args.norm_based_clipping, args.ng_affine_options, gru_delay = gru_delay[i][0])
-            prev_layer_output2 = nodes.AddGruLayer(config_lines, "BGru{0}_backward".format(i+1), prev_layer_output, args.recurrent_dim,
+            prev_layer_output2 = nodes.AddGruLayer(config_lines, "BGru{0}_backward".format(i+1), prev_layer_output, args.recurrent_projection_dim, args.non_recurrent_projection_dim,
                                             args.config_dir + '/scale_minus_one.vec', args.config_dir + '/bias_one.vec',
                                             args.clipping_threshold, args.norm_based_clipping, args.ng_affine_options, gru_delay = gru_delay[i][1])
             prev_layer_output['descriptor'] = 'Append({0}, {1})'.format(prev_layer_output1['descriptor'], prev_layer_output2['descriptor'])
             prev_layer_output['dimension'] = prev_layer_output1['dimension'] + prev_layer_output2['dimension']
         else: # Gru layer case
-            prev_layer_output = nodes.AddGruLayer(config_lines, "Gru{0}".format(i+1), prev_layer_output, args.recurrent_dim,
+            prev_layer_output = nodes.AddGruLayer(config_lines, "Gru{0}".format(i+1), prev_layer_output, args.recurrent_projection_dim, args.non_recurrent_projection_dim,
 			                                args.config_dir + '/scale_minus_one.vec', args.config_dir + '/bias_one.vec',
                                             args.clipping_threshold, args.norm_based_clipping, args.ng_affine_options, gru_delay = gru_delay[i][0])
         # make the intermediate config file for layerwise discriminative training

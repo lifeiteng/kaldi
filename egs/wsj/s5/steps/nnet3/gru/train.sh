@@ -55,7 +55,8 @@ splice_indexes="-2,-1,0,1,2 0 0"
 
 # GRU parameters
 num_gru_layers=3
-recurrent_dim=1024  # dimension of the GRU recurrent node
+recurrent_projection_dim=1024  # dimension of the GRU recurrent node
+non_recurrent_projection_dim=1024  # dimension of the GRU non-recurrent node
 hidden_dim=1024  # the dimension of the fully connected hidden layer outputs
 norm_based_clipping=true  # if true norm_based_clipping is used.
                           # In norm-based clipping the activation Jacobian matrix
@@ -163,6 +164,7 @@ if [ $# != 4 ]; then
   echo " ################### GRU options ###################### "
   echo "  --num-gru-layers <int|3>                         # number of GRU layers"
   echo "  --recurrent-dim   <int|1024>                     # dimension of the GRU recurrent node"
+  echo "  --non-recurrent-dim   <int|1024>                     # dimension of the GRU non-recurrent node"
   echo "  --hidden-dim      <int|1024>                     # the dimension of the fully connected hidden layer outputs"
   echo "  --chunk-left-context <int|40>                    # number of time-steps used in the estimation of the first GRU state"
   echo "  --chunk-width <int|20>                           # number of output labels in the sequence used to train an GRU"
@@ -259,7 +261,8 @@ if [ $stage -le -5 ]; then
     --num-gru-layers $num_gru_layers \
     --feat-dim $feat_dim \
     --ivector-dim $ivector_dim \
-    --recurrent-dim $recurrent_dim \
+    --recurrent-projection-dim $recurrent_projection_dim \
+    --non-recurrent-projection-dim $non_recurrent_projection_dim \
     --hidden-dim $hidden_dim \
     --norm-based-clipping $norm_based_clipping \
     --clipping-threshold $clipping_threshold \
