@@ -200,6 +200,98 @@ void CuDevice::SelectGpuId(std::string use_gpu) {
   }
 }
 
+void CuDevice::SelectGpuId(int32 gpu_id) {
+  // Make sure this function is not called twice!
+  if (Enabled()) {
+    KALDI_ERR << "There is already an active GPU " << active_gpu_id_
+      << ", cannot change it on the fly!";
+  }
+  // Allow the GPU to stay disabled
+  if (!Enabled() && gpu_id < 0) {
+    KALDI_LOG << "Manually selected to compute on CPU.";
+    return;
+  }
+
+  // Check that we have a gpu available
+  int32 n_gpu = 0;
+  cudaGetDeviceCount(&n_gpu);
+  if (n_gpu == 0) {
+    if ( gpu_id >=0 && gpu_id < n_gpu) {
+      KALDI_ERR << "No CUDA GPU detected!";
+    }
+    if (gpu_id < 0) {
+      KALDI_WARN << "Running on CPU!!! No CUDA GPU detected...";
+      return;
+    }
+  } else if (gpu_id >= n_gpu) {
+    KALDI_ERR << " gpu_id(" << gpu_id << ") >= n_gpu(" << n_gpu << ").";
+    return;
+  }
+
+  int32 ret = cudaSetDevice(gpu_id);
+  switch(ret) {
+    case cudaSuccess : {
+      // Create the CUDA context for the thread
+      cudaThreadSynchronize(); //deprecated, but for legacy not cudaDeviceSynchronize
+      // Get GPU name
+      char name[128];
+      DeviceGetName(name,128,gpu_id);
+      // Get GPU memory stats
+      int64 free, total;
+      std::string mem_stats;
+      mem_stats = GetFreeMemory(&free, &total);
+      // Log
+      KALDI_LOG << "cudaSetDevice(" << gpu_id << "): "
+                << name << "\t" << mem_stats;
+      // Destroy the CUDA context for the thread
+#if (CUDA_VERSION < 75)
+      cudaThreadExit(); //deprecated, but for legacy reason not cudaDeviceReset
+#endif
+    } break;
+
+#if (CUDA_VERSION > 32)
+    case cudaErrorDeviceAlreadyInUse :
+      KALDI_LOG << "cudaSetDevice(" << gpu_id << "): "
+                << "Device cannot be accessed, used EXCLUSIVE-THREAD mode...";
+      break;
+#endif
+    case cudaErrorInvalidDevice :
+      KALDI_LOG << "cudaSetDevice(" << gpu_id << "): "
+                << "Device cannot be accessed, not a VALID CUDA device!";
+      break;
+    default :
+      KALDI_LOG << "cudaSetDevice(" << gpu_id << "): "
+                << "returned " << ret << ", "
+                << cudaGetErrorString((cudaError_t)ret);
+  }
+
+  // Check if the machine use compute exclusive mode
+  if (IsComputeExclusive()) {
+    FinalizeActiveGpu(); // cublasInit() is here.
+    return;
+  } else {
+    // Or suggest to use compute exclusive mode
+    if (n_gpu > 1) {
+      KALDI_WARN << "Suggestion: use 'nvidia-smi -c 1' to set compute exclusive mode";
+    }
+    // And select the GPU according to gpu_id
+    if (cudaSetDevice(gpu_id)) {
+      FinalizeActiveGpu();
+      return;
+    } else {
+      // Could not get GPU, after prevously having the CUDA context?
+      // Strange but not impossible...
+      if ( gpu_id >= 0 && gpu_id < n_gpu) {
+        KALDI_ERR << "Error acquiring GPU.";
+      }
+      if (gpu_id < 0) {
+        KALDI_WARN << "Running on CPU!!! Error acquiring GPU.";
+        return;
+      }
+    }
+  }
+}
+
 
 void CuDevice::FinalizeActiveGpu() {
   // The device at this point should have active GPU, so we can query its name

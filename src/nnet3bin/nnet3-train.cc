@@ -43,12 +43,15 @@ int main(int argc, char *argv[]) {
 
     bool binary_write = true;
     std::string use_gpu = "yes";
+    int32 gpu_id = -1;
+
     NnetTrainerOptions train_config;
 
     ParseOptions po(usage);
     po.Register("binary", &binary_write, "Write output in binary mode");
     po.Register("use-gpu", &use_gpu,
                 "yes|no|optional|wait, only has effect if compiled with CUDA");
+    po.Register("gpu-id", &gpu_id, "<0 use CPU, 0<= gpu_id <= num_gpus-1 use GPU[gpu_id].");
 
     train_config.Register(&po);
 
@@ -60,7 +63,12 @@ int main(int argc, char *argv[]) {
     }
 
 #if HAVE_CUDA==1
-    CuDevice::Instantiate().SelectGpuId(use_gpu);
+    if (use_gpu == "no" || gpu_id < 0) {
+      CuDevice::Instantiate().SelectGpuId(use_gpu);
+    }
+    else if (gpu_id >= 0) {
+      CuDevice::Instantiate().SelectGpuId(gpu_id);
+    }
 #endif
 
     std::string nnet_rxfilename = po.GetArg(1),
