@@ -1257,6 +1257,10 @@ void AffineComponent::Read(std::istream &is, bool binary) {
   // of how ReadNew() works.
   ExpectOneOrTwoTokens(is, binary, ostr_beg.str(), "<LearningRate>");
   ReadBasicType(is, binary, &learning_rate_);
+  if (PeekToken(is, binary) == 'B') {
+    ExpectToken(is, binary, "<BiasLearningRate>");
+    ReadBasicType(is, binary, &bias_learning_rate_);
+  }
   ExpectToken(is, binary, "<LinearParams>");
   linear_params_.Read(is, binary);
   ExpectToken(is, binary, "<BiasParams>");
@@ -1418,6 +1422,10 @@ void AffineComponentPreconditioned::Read(std::istream &is, bool binary) {
   // of how ReadNew() works.
   ExpectOneOrTwoTokens(is, binary, ostr_beg.str(), "<LearningRate>");
   ReadBasicType(is, binary, &learning_rate_);
+  if (PeekToken(is, binary) == 'B') {
+    ExpectToken(is, binary, "<BiasLearningRate>");
+    ReadBasicType(is, binary, &bias_learning_rate_);
+  }
   ExpectToken(is, binary, "<LinearParams>");
   linear_params_.Read(is, binary);
   ExpectToken(is, binary, "<BiasParams>");
@@ -1666,6 +1674,10 @@ void AffineComponentPreconditionedOnline::Read(std::istream &is, bool binary) {
   // of how ReadNew() works.
   ExpectOneOrTwoTokens(is, binary, ostr_beg.str(), "<LearningRate>");
   ReadBasicType(is, binary, &learning_rate_);
+  if (PeekToken(is, binary) == 'B') {
+    ExpectToken(is, binary, "<BiasLearningRate>");
+    ReadBasicType(is, binary, &bias_learning_rate_);
+  }
   ExpectToken(is, binary, "<LinearParams>");
   linear_params_.Read(is, binary);
   ExpectToken(is, binary, "<BiasParams>");
