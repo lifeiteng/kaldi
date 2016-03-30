@@ -56,6 +56,9 @@ int main(int argc, char *argv[]) {
         online_ivector_rspecifier,
         utt2spk_rspecifier;
     int32 online_ivector_period = 0;
+    std::string use_gpu = "yes";
+    int32 gpu_id = -1;
+
     config.Register(&po);
     decodable_opts.Register(&po);
     po.Register("word-symbol-table", &word_syms_filename,
@@ -71,6 +74,9 @@ int main(int argc, char *argv[]) {
     po.Register("online-ivector-period", &online_ivector_period, "Number of frames "
                 "between iVectors in matrices supplied to the --online-ivectors "
                 "option");
+    po.Register("use-gpu", &use_gpu,
+                "yes|no|optional|wait, only has effect if compiled with CUDA");
+    po.Register("gpu-id", &gpu_id, "<0 use CPU, 0<= gpu_id <= num_gpus-1 use GPU[gpu_id].");
 
     po.Read(argc, argv);
 
@@ -78,6 +84,15 @@ int main(int argc, char *argv[]) {
       po.PrintUsage();
       exit(1);
     }
+
+#if HAVE_CUDA==1
+    if (use_gpu == "no" || gpu_id < 0) {
+      CuDevice::Instantiate().SelectGpuId(use_gpu);
+    }
+    else if (gpu_id >= 0) {
+      CuDevice::Instantiate().SelectGpuId(gpu_id);
+    }
+#endif
 
     std::string model_in_filename = po.GetArg(1),
         fst_in_str = po.GetArg(2),
