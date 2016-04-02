@@ -412,6 +412,9 @@ def Align(dir, data, lang, run_opts, iter = None, transform_dir = None,
 
     alidir = '{dir}/ali{ali_suffix}'.format(dir = dir,
                ali_suffix = "_iter_{0}".format(iter) if iter is not None else "")
+    if '-1' not in run_opts.gpus:
+        for gid in run_opts.gpus:
+            subprocess.call('echo {passward} | sudo -S nvidia-smi -i {gpu_id} -c 0'.format(passward = run_opts.passward, gpu_id = gid))
 
     logger.info("Aligning the data{gpu}with {num_jobs} jobs.".format(
         gpu = " using gpu " if run_opts.realign_use_gpu else " ",
@@ -422,7 +425,7 @@ steps/nnet3/align.sh --nj {num_jobs_align} --cmd "{align_cmd} {align_queue_opt}"
         --transform-dir "{transform_dir}" \
         --online-ivector-dir "{online_ivector_dir}" \
         --iter "{iter}" {data} {lang} {dir} {alidir}
-    """.format(dir = dir, align_use_gpu = "yes" if run_opts.realign_use_gpu else "no",
+    """.format(dir = dir, align_use_gpu = "wait" if run_opts.realign_use_gpu else "no",
                align_cmd = run_opts.realign_command,
                align_queue_opt = run_opts.realign_queue_opt,
                num_jobs_align = run_opts.realign_num_jobs,
@@ -431,6 +434,9 @@ steps/nnet3/align.sh --nj {num_jobs_align} --cmd "{align_cmd} {align_queue_opt}"
                iter = iter if iter is not None else "",
                alidir = alidir,
                lang = lang, data = data))
+    if '-1' not in run_opts.gpus:
+        for gid in run_opts.gpus:
+            subprocess.call('echo {passward} | sudo -S nvidia-smi -i {gpu_id} -c 1'.format(passward = run_opts.passward, gpu_id = gid))
     return alidir
 
 def Realign(dir, iter, feat_dir, lang, prev_egs_dir, cur_egs_dir,
