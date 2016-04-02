@@ -394,7 +394,6 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
         open('{0}/.error'.format(dir), 'w').close()
         raise Exception("There was error during training iteration {0}".format(iter))
 
-
 def TrainOneIteration(dir, iter, egs_dir,
                       num_jobs, num_archives_processed, num_archives,
                       learning_rate, shrinkage_value, num_chunk_per_minibatch,
@@ -487,6 +486,12 @@ nnet3-am-copy --scale={shrink} --set-raw-nnet=- {dir}/{iter}.mdl {dir}/{new_iter
         raise Exception("Could not find {0}, at the end of iteration {1}".format(new_model, iter))
     elif os.stat(new_model).st_size == 0:
         raise Exception("{0} has size 0. Something went wrong in iteration {1}".format(new_model, iter))
+    try:
+        if cache_read_opt:
+            os.remove("{dir}/cache.{iter}".format(dir=dir, iter=iter))
+    except OSError:
+        raise Exception("Error while trying to delete the cache file")
+
 
 # args is a Namespace with the required parameters
 def Train(args, run_opts):
