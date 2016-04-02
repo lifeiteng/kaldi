@@ -56,7 +56,7 @@ int main(int argc, char *argv[]) {
         online_ivector_rspecifier,
         utt2spk_rspecifier;
     int32 online_ivector_period = 0;
-    std::string use_gpu = "yes";
+    std::string use_gpu = "wait";
     int32 gpu_id = -1;
 
     config.Register(&po);
@@ -251,6 +251,10 @@ int main(int argc, char *argv[]) {
         } else num_fail++;
       }
     }
+
+#if HAVE_CUDA==1
+    CuDevice::Instantiate().PrintProfile();
+#endif
 
     double elapsed = timer.Elapsed();
     KALDI_LOG << "Time taken "<< elapsed
