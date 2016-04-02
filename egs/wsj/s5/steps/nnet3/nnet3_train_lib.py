@@ -414,7 +414,7 @@ def Align(dir, data, lang, run_opts, iter = None, transform_dir = None,
                ali_suffix = "_iter_{0}".format(iter) if iter is not None else "")
     if '-1' not in run_opts.gpus:
         for gid in run_opts.gpus:
-            subprocess.call('echo {passward} | sudo -S nvidia-smi -i {gpu_id} -c 0'.format(passward = run_opts.passward, gpu_id = gid))
+            subprocess.call('echo {passward} | sudo -S nvidia-smi -i {gpu_id} -c 0'.format(passward = run_opts.passward, gpu_id = gid), shell = True)
 
     logger.info("Aligning the data{gpu}with {num_jobs} jobs.".format(
         gpu = " using gpu " if run_opts.realign_use_gpu else " ",

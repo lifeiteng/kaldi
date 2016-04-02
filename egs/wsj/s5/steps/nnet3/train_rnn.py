@@ -201,6 +201,10 @@ def GetArgs():
                         help="Specifies the stage of the experiment to execution from")
     parser.add_argument("--exit-stage", type=int, default=None,
                         help="If specified, training exits before running this stage")
+    parser.add_argument("--warm-iters", type=int, default=10,
+                        help="Run single job at begining")
+    parser.add_argument("--cv-period", type=int, default=10,
+                        help="Run Cv every period iter")
     parser.add_argument("--cmd", type=str, action = NullstrToNoneAction,
                         dest = "command",
                         help="""Specifies the script to launch jobs.
@@ -216,7 +220,7 @@ def GetArgs():
     parser.add_argument("--sudo-passward", type=str, action = NullstrToNoneAction,
                         dest = "passward",
                         help="Your sudo passward", default="")
-    parser.add_argument("--gpus_wait", type=str, action = StrToBoolAction,
+    parser.add_argument("--gpus-wait", type=str, action = StrToBoolAction,
                         choices = ["true", "false"],
                         help="Wait all gpus jobs finish", default=True)
     parser.add_argument("--cleanup", type=str, action = StrToBoolAction,
@@ -313,13 +317,15 @@ def ProcessArgs(args):
         run_opts.gpus = ['-1']
         run_opts.num_gpus = 1
 
+    run_opts.cv_period = args.cv_period
+
     if '-1' not in run_opts.gpus:
         if args.gpus_wait:
             for gid in run_opts.gpus:
-                subprocess.call('echo {passward} | sudo -S nvidia-smi -i {gpu_id} -c 1'.format(passward = run_opts.passward, gpu_id = gid))
+                subprocess.call('echo {passward} | sudo -S nvidia-smi -i {gpu_id} -c 1'.format(passward=run_opts.passward, gpu_id=gid), shell=True)
         else:
             for gid in run_opts.gpus:
-                subprocess.call('echo {passward} | sudo -S nvidia-smi -i {gpu_id} -c 0'.format(passward = run_opts.passward, gpu_id = gid))
+                subprocess.call('echo {passward} | sudo -S nvidia-smi -i {gpu_id} -c 0'.format(passward=run_opts.passward, gpu_id=gid), shell=True)
 
     if args.realign_use_gpu is True:
         run_opts.realign_use_gpu = True
@@ -377,6 +383,7 @@ class RunOpts:
         self.gpus = None
         self.gpus_wait = None
         self.passward = None
+        self.cv_period = 1
 
 
 def AllSuccess(dir, iter, processes):
@@ -466,7 +473,7 @@ def TrainOneIteration(dir, iter, egs_dir,
     # Use the egs dir from the previous iteration for the diagnostics
     logger.info("Training neural net (pass {0})".format(iter))
     
-    if iter % run_opts.progress_period == 0:
+    if iter % run_opts.cv_period == 0:
         ComputeTrainCvProbabilities(dir, iter, egs_dir, run_opts)
         if iter > 0:
             ComputeProgress(dir, iter, egs_dir, run_opts)
@@ -547,6 +554,7 @@ nnet3-am-copy --scale={shrink} --set-raw-nnet=- {dir}/{iter}.mdl {dir}/{new_iter
         raise Exception("Could not find {0}, at the end of iteration {1}".format(new_model, iter))
     elif os.stat(new_model).st_size == 0:
         raise Exception("{0} has size 0. Something went wrong in iteration {1}".format(new_model, iter))
+
 
 # args is a Namespace with the required parameters
 def Train(args, run_opts):
