@@ -429,7 +429,7 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
             if job == 1:
               # an option for writing cache (storing pairs of nnet-computations and
               # computation-requests) during training.
-              cache_write_opt="--write-cache={dir}/cache.{iter}".format(dir=dir, iter=iter+1)
+              cache_write_opt="--write-cache={dir}/cache.{iter} --binary-write-cache=true".format(dir=dir, iter=iter+1)
 
             process_handle = RunKaldiCommand("""
 {command} {train_queue_opt} {dir}/log/train.{iter}.{job}.log \
@@ -490,8 +490,9 @@ def TrainOneIteration(dir, iter, egs_dir,
         do_average = True
         if iter == 0:
             do_average = False   # on iteration 0, pick the best, don't average.
+        else:
+            cache_read_opt = "--read-cache={dir}/cache.{iter}".format(dir=dir, iter=iter)
         raw_model_string = "nnet3-am-copy --raw=true --learning-rate={0} {1}/{2}.mdl - |".format(learning_rate, dir, iter)
-        cache_read_opt = "--read-cache={dir}/cache.{iter}".format(dir=dir, iter=iter)
 
     if do_average:
       cur_num_chunk_per_minibatch = num_chunk_per_minibatch
