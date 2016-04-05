@@ -1,0 +1,33 @@
+# #!/bin/bash
+# for x in exp/{mono,tri,sgmm,dnn,combine}*/decode*; do 
+#     # echo $x
+# 	[ -d $x ] && echo $x | grep "${1:-.*}" >/dev/null && grep WER $x/wer_* 2>/dev/null | utils/best_wer.sh; 
+# done
+# for x in exp/nnet2_online/{nnet_v0-fRawLDA-sp5-h5-s2048}*/decode*; do 
+# 	[ -d $x ] && echo $x | grep "${1:-.*}" >/dev/null && grep WER $x/wer_* 2>/dev/null | utils/best_wer.sh; 
+# done
+
+# for x in exp/{mono,tri,sgmm,dnn,combine}.*/decode*; do 
+#     # echo $x
+# 	[ -d $x ] && echo $x | grep "${1:-.*}" >/dev/null && grep Sum $x/score_*/*.sys 2>/dev/null | utils/best_wer.sh; 
+# done
+
+exp="exp"
+
+. ./path.sh
+. ./utils/parse_options.sh
+
+
+for x in $exp/{mono,tri}*/*decode*; do 
+	[ -d $x ] && grep WER $x/wer_* 2>/dev/null | utils/best_wer.sh; 
+done
+
+for x in $exp/dnn*/*decode*; do
+	[ -d $x ] && grep WER $x/wer_* 2>/dev/null | utils/best_wer.sh; 
+done
+
+for x in $exp/nnet3/*/*decode*; do
+	[ -d $x ] && grep WER $x/wer_* 2>/dev/null | utils/best_wer.sh; 
+done
+
+exit 0
