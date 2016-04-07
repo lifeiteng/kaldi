@@ -429,7 +429,7 @@ def Align(dir, data, lang, run_opts, iter = None, transform_dir = None,
                ali_suffix = "_iter_{0}".format(iter) if iter is not None else "")
     if '-1' not in run_opts.gpus:
         for gid in run_opts.gpus:
-            subprocess.call('echo {passward} | sudo -S nvidia-smi -i {gpu_id} -c 0'.format(passward = run_opts.passward, gpu_id = gid), shell = True)
+            subprocess.call('echo {password} | sudo -S nvidia-smi -i {gpu_id} -c 0'.format(password = run_opts.password, gpu_id = gid), shell = True)
 
     logger.info("Aligning the data{gpu}with {num_jobs} jobs.".format(
         gpu = " using gpu " if run_opts.realign_use_gpu else " ",
@@ -451,7 +451,7 @@ steps/nnet3/align.sh --nj {num_jobs_align} --cmd "{align_cmd} {align_queue_opt}"
                lang = lang, data = data))
     if '-1' not in run_opts.gpus:
         for gid in run_opts.gpus:
-            subprocess.call('echo {passward} | sudo -S nvidia-smi -i {gpu_id} -c 1'.format(passward = run_opts.passward, gpu_id = gid))
+            subprocess.call('echo {password} | sudo -S nvidia-smi -i {gpu_id} -c 1'.format(password = run_opts.password, gpu_id = gid))
     return alidir
 
 def Realign(dir, iter, feat_dir, lang, prev_egs_dir, cur_egs_dir,

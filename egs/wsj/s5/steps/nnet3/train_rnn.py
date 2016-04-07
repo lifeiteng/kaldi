@@ -217,9 +217,9 @@ def GetArgs():
     parser.add_argument("--gpus", type=str, action = NullstrToNoneAction,
                         dest = "gpus",
                         help="Use GPUs for training, eg. '0 1 2' ", default="-1")
-    parser.add_argument("--sudo-passward", type=str, action = NullstrToNoneAction,
-                        dest = "passward",
-                        help="Your sudo passward", default="")
+    parser.add_argument("--sudo-password", type=str, action = NullstrToNoneAction,
+                        dest = "password",
+                        help="Your sudo password", default="")
     parser.add_argument("--gpus-wait", type=str, action = StrToBoolAction,
                         choices = ["true", "false"],
                         help="Wait all gpus jobs finish", default=True)
@@ -310,9 +310,9 @@ def ProcessArgs(args):
         run_opts.gpus = args.gpus.split()
         run_opts.num_gpus = len(run_opts.gpus)
         run_opts.gpus_wait = args.gpus_wait
-        if not args.passward:
-            raise Exception("You must set '--sudo-passward' if you use '--gpus'")
-        run_opts.passward = args.passward
+        if not args.password:
+            raise Exception("You must set '--sudo-password' if you use '--gpus'")
+        run_opts.password = args.password
     else:
         run_opts.gpus = ['-1']
         run_opts.num_gpus = 1
@@ -322,10 +322,10 @@ def ProcessArgs(args):
     if '-1' not in run_opts.gpus:
         if args.gpus_wait:
             for gid in run_opts.gpus:
-                subprocess.call('echo {passward} | sudo -S nvidia-smi -i {gpu_id} -c 1'.format(passward=run_opts.passward, gpu_id=gid), shell=True)
+                subprocess.call('echo {password} | sudo -S nvidia-smi -i {gpu_id} -c 1'.format(password=run_opts.password, gpu_id=gid), shell=True)
         else:
             for gid in run_opts.gpus:
-                subprocess.call('echo {passward} | sudo -S nvidia-smi -i {gpu_id} -c 0'.format(passward=run_opts.passward, gpu_id=gid), shell=True)
+                subprocess.call('echo {password} | sudo -S nvidia-smi -i {gpu_id} -c 0'.format(password=run_opts.password, gpu_id=gid), shell=True)
 
     if args.realign_use_gpu is True:
         run_opts.realign_use_gpu = True
@@ -382,7 +382,7 @@ class RunOpts:
         self.num_gpus = None
         self.gpus = None
         self.gpus_wait = None
-        self.passward = None
+        self.password = None
         self.cv_period = 1
 
 
@@ -447,7 +447,7 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
             processes.extend(gpu_processes)
     AllSuccess(dir, iter, processes)
 
-def TrainOneIteration(dir, iter, egs_dir,
+def TrainOneIteration(dir, iter, num_iters, egs_dir,
                       num_jobs, num_archives_processed, num_archives,
                       learning_rate, shrinkage_value, num_chunk_per_minibatch,
                       num_hidden_layers, add_layers_period,
@@ -456,7 +456,7 @@ def TrainOneIteration(dir, iter, egs_dir,
                       run_opts):
     # Set off jobs doing some diagnostics, in the background.
     # Use the egs dir from the previous iteration for the diagnostics
-    logger.info("Training neural net (pass {0})".format(iter))
+    logger.info("Training neural net (pass {0} / {1})".format(iter, num_iters))
     
     if iter % run_opts.cv_period == 0:
         ComputeTrainCvProbabilities(dir, iter, egs_dir, run_opts)
@@ -692,7 +692,7 @@ def Train(args, run_opts):
             shrinkage_value = args.shrink_value if DoShrinkage(iter, model_file, "SigmoidComponent", args.shrink_threshold) else 1
             logger.info("On iteration {0}, learning rate is {1} and shrink value is {2}.".format(iter, learning_rate(iter, current_num_jobs, num_archives_processed), shrinkage_value))
 
-            TrainOneIteration(args.dir, iter, egs_dir, current_num_jobs,
+            TrainOneIteration(args.dir, iter, num_iters, egs_dir, current_num_jobs,
                               num_archives_processed, num_archives,
                               learning_rate(iter, current_num_jobs, num_archives_processed),
                               shrinkage_value,
@@ -725,7 +725,7 @@ def Train(args, run_opts):
     if args.stage <= num_iters + 1:
         logger.info("Getting average posterior for purposes of adjusting the priors.")
         try:
-            subprocess.call('echo {passward} | sudo -S nvidia-smi -c 0'.format(passward=run_opts.passward), shell=True)
+            subprocess.call('echo {password} | sudo -S nvidia-smi -c 0'.format(password=run_opts.password), shell=True)
         except Exception as e:
             raise Exception("Failed to setting nvidia-smi -c 0")
 
