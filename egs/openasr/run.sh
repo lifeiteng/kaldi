@@ -22,7 +22,7 @@ numGaussSAT=90000
 feats_nj=6
 train_nj=6
 decode_nj=6
-nj=6
+nj=12
 
 data=data
 
@@ -31,45 +31,105 @@ if [ $stage -le -2 ];then
     echo "                Data & Lexicon & Language Preparation                     "
     echo ============================================================================
     echo "======== 处理数据集 voxpop TED openasr-data-01 ========"
-    local/std_prepare_data.sh --train true --test true --type 1 /data/voxpop --data data/voxpop
-    local/std_prepare_data.sh --train true --test true --type 1 /data/TEDLIUM-1 --data data/TED-1
-    local/std_prepare_data.sh --train true --test true --type 1 /data/openasr-data-01 --data data/LLS-1
+    # local/std_prepare_data.sh --train true --test true --corpus "voxpop" --data data/voxpop /data/voxpop
+    # (
+    #     ted=/home/feiteng/kaldi-trunk/egs/tedlium/s5/data
+    #     mkdir -p data/tedlium
+    #     cp -r $ted/{train,test,dev} data/tedlium
+    #     for x in train test dev;do
+    #         # [ ! -f data/tedlium/$x/text.back ] && cp data/tedlium/$x/text data/tedlium/$x/test.back
+    #         awk '{k=$1; $1=""; t=tolower($0); print k, t;}' $ted/$x/text>data/tedlium/$x/text
+    #     done
+    # )
+    # local/std_prepare_data.sh --train true --corpus "openasr" --data data/openasr-01 /data/openasr-data-01 
     
-    echo "========  数据清洗     ========"
-    for dir in train test;do
-        cp $data/$dir/text $data/$dir/text.t
-        # awk 'FNR==NR{w=$1; Z[w]=1;} FNR<NR{for(i=2;i<=NF;i++){if(!($i in Z)) printf("%s\n", $1);}}'  $dict $data/$dir/text.t | sort | uniq >oov.sent
-        # grep -v -f oov.sent $data/$dir/text.t >$data/$dir/text
+    # ted=/home/feiteng/kaldi-trunk/egs/tedlium/s5/data
+    # (
+    #     echo "========  准备发音词典  ========"
+    #     rm -rf data/local/dict
+    #     mkdir -p data/local/dict
+    #     cat /data/dictionary/{tedlium.dict,9001.dict} >data/local/dict/lexicon_9001_ted.txt
+    #     local/std_prepare_dict.sh --data data --phoneset 9000 data/local/dict/lexicon_9001_ted.txt || exit 1;
+    # )
+    
+    # echo "========  准备langs    ========"
+    # # Prepare $${lang} and $data/local/lang directories
+    # utils/prepare_lang.sh --share-silence-phones true --num-sil-states 3 --position-dependent-phones false \
+    #     data/local/dict '!SIL' data/local/lang_tmp data/lang || exit 1;
 
-        std/local/clean_trans.py --lower True --clean-oov True $dict $data/$dir/text.t $data/$dir/text
+    # echo "========  数据清洗     ========"
+    # dict=data/local/dict/lexicon.txt
+    # for x in voxpop tedlium openasr-01;do
+    #     for y in train test dev;do
+    #         [ ! -d data/$x/$y ] && continue
+    #         echo "Process data/$x/$y/text..."
+    #         cp data/$x/$y/text data/$x/$y/text.t
+    #         local/clean_trans.py --lower True --clean-oov False $dict data/$x/$y/text.t data/$x/$y/text || exit 1;
+    #     done
+    # done
+    # exit 1;
 
-        # awk 'FNR==NR{w=$1; Z[w]=1;} FNR<NR{for(i=2;i<=NF;i++){if(!($i in Z)) printf("%s\n", $1);}}'  $dict $data/$dir/text
+    # echo "========  准备语言模型  ========"
+    # local/std_prepare_lm.sh --data data || exit 1;
+
+    # echo "========  format data ========"
+    # local/std_format_data.sh --data data --lm-suffix "translm_tg" data/local/lm/trans_lm_3.arpa || exit 1;
+    # local/std_format_data.sh --data data --lm-suffix "biglm_tg" /data/LM/interp_lm.prune-8 || exit 1;
+
+    (
+    echo "======== 统计 duration ========"
+    for x in voxpop tedlium openasr-01;do
+        for y in train test dev;do
+            [ ! -d data/$x/$y ] && continue
+            utils/data/get_utt2dur.sh data/$x/$y || exit 1;
+            awk 'BEGIN{sum=0;} {sum+=sprintf("%f",$2)} END{printf("%.3f seconds %.3f hours\n",sum, sum/3600);}' data/$x/$y/utt2dur >data/$x/$y/duration
+            echo "data/$x/$y `cat data/$x/$y/duration`"
+        done
+    done
+    ) &
+
+    # for x in voxpop tedlium openasr-01;do
+    for x in openasr-01;do
+        for y in train test dev;do
+            [ ! -d data/$x/$y ] && continue
+            echo "Process data/$x/$y ..."
+            # grep -v -f local/users.filter.base64 data/$x/$y/text >tmp/text || exit 1;
+            # mv tmp/text data/$x/$y/text || exit 1;
+            utils/fix_data_dir.sh data/$x/$y || exit 1;
+            echo ============================================================================
+            echo "        Fbank Feature Extration & CMVN for Training and Test set on"  `date`
+            echo ============================================================================
+
+            featdir=fbank40
+            steps/make_fbank.sh --nj $nj --cmd "run.pl" data/$x/$y exp/make_feat_${x}_fbank/$y data/$x/$featdir || exit 1;
+            steps/compute_cmvn_stats.sh data/$x/$y exp/make_feat_${x}_fbank/$y data/$x/$featdir || exit 1;
+
+            echo ============================================================================
+            echo "        MFCC Feature Extration & CMVN for Training and Test set on"  `date`
+            echo ============================================================================
+
+            featdir=mfcc24
+            steps/make_mfcc.sh --nj $nj --cmd "run.pl" data/$x/$y exp/make_feat_$x_mfcc/$y data/$x/$featdir || exit 1;
+            steps/compute_cmvn_stats.sh data/$x/$y exp/make_feat_$x_mfcc/$y data/$x/$featdir || exit 1;
+        done
     done
 
-    echo "========  准备发音词典  ========"
-    rm -rf data/local/dict
-    local/openasr_prepare_dict.sh --data data models/dicts/words_trans.txt || exit 1;
-    
-    echo "========  准备langs    ========"
+    wait 
 
-    # Prepare $${lang} and $data/local/lang directories
-    utils/prepare_lang.sh --share-silence-phones true --num-sil-states 3 --position-dependent-phones false \
-        data/local/dict '!SIL' data/local/lang_tmp data/lang || exit 1;
-    
-    echo "========  准备语言模型  ========"
-    local/openasr_prepare_lm.sh --data data --biglm $biglm
-
-    echo "========  format data ========"
-    local/openasr_format_data.sh --data data data/local/lm/mixed_tg.arpa
-
+    echo "======== 分配数据集 500hours 1000hours 2000hours 5000hours 10000hours ========"
+  
+    exit 1;
     echo "========  combine data ========"
     utils/combine_data.sh --skip-fix true data/train data/LLS-1/train data/TED-1/train data/voxpop/train
     utils/fix_data_dir.sh $data/train
+    
 
-    echo "======== 分配数据集 500hours 1000hours 2000hours 5000hours 10000hours ========"
 fi
 
 echo "TODO cp data/*/{train,test} to data_fbank"
+
+
+
 
 if [ $stage -le -1 ];then
     echo ============================================================================

@@ -8,102 +8,139 @@ import random
 import string
 import os
 import hashlib
+from optparse import OptionParser
+
+corpus_types = ['openasr', 'voxpop', 'ted']
+corpus_type = 'openasr'
+
 
 def get_hash_str(val):
     return hashlib.md5(str(val)).hexdigest()
 
+
+def GetKeyValue(line):
+    splits = line.strip().split()
+    assert len(splits) >= 2
+    return (splits[0], ' '.join(splits[1:]))
+
+
+def FixTrans(in_trans_file, out_trans_file):
+    in_trans_lines = open(in_trans_file).readlines()
+    try:
+        with open(out_trans_file, 'w') as f:
+            for line in in_trans_lines:
+                m = re.match(r'(.+) \((.+)\)$', line.strip())
+                if m is None:
+                    (key, value) = GetKeyValue(line)
+                    wav_name = key
+                    trans_text = value.lower()
+                else:
+                    wav_name = m.group(2).strip()
+                    trans_text = m.group(1).strip().lower()
+                if not wav_name.endswith('.wav'):
+                    wav_name = wav_name + '.wav'
+                print >>f, wav_name, trans_text
+    except:
+        with open(in_trans_file, 'w') as f:
+            for line in in_trans_lines:
+                print >>f, line.strip()
+        print "Except occur!!!"
+        exit(-1)
+
+
 class MakeTrans:
     def __init__(self, postfix, in_flist, input_snr, out_txt, out_scp, utt2spk):
         self.SpknameDict = dict()
-        self.TspDict = dict()
+        self.trans = dict()
 
-        self.F = open(input_snr, 'r').readlines()
-
-        self.G = open(in_flist, 'r').readlines()
+        self.wavlist = open(in_flist, 'r').readlines()
         self.postfix = postfix
 
-        self.O = open(out_txt, 'w')
-        self.P = open(out_scp, 'w')
-        self.U = open(utt2spk, 'w')
-        self.Fdict()
+        self.text = open(out_txt, 'w')
+        self.wavscp = open(out_scp, 'w')
+        self.utt2spk = open(utt2spk, 'w')
+        self.ParseTrans(input_snr)
+        self.ProcessAllInOne()
 
-    def Fdict(self):
-        for line in self.F:
-            m = re.match(r'(.+) \((.+)\)$', line.strip())
-            self.TspDict[m.group(2).strip()] = m.group(1).strip().lower()
+    def ParseTrans(self, input_snr):
+        input_snr_lines = open(input_snr, 'r').readlines()
+        for line in input_snr_lines:
+            (key, value) = GetKeyValue(line)
+            self.trans[key] = value
+
+    def GetWavName(self, line):
+        return line.strip().split('/')[-1]
 
     def ProcessAllInOne(self):
         no_tsp_num = 0
         utt2spk = dict()
-        for i in range(0,self.G.__len__()):
+        for i in range(0, self.wavlist.__len__()):
+            line = self.wavlist[i].strip()
             # 4584_engzo_2603_ios
             # 4294_engzo_1983_android
             # 4672_engzo_2577_android
-            if not os.path.isfile(self.G[i].strip()):
+            if not os.path.isfile(line):
                 continue
-            wavname = self.G[i].strip().split("/")[-1]
+            if not line.endswith('.wav'):
+                continue
+
+            wavname = self.GetWavName(line)
             sp = wavname.split("_")
             spkname = sp[0]
 
-            if True:
+            key = wavname.replace('.wav', '') # 音频文件名
+            if corpus_type == 'voxpop': # voxpop key修改为固定长度的hash string
                 spkname = get_hash_str(spkname)
-                assert spkname != ''
-                if wavname.find('ios') > 0:
-                    spkname = spkname
-                else:
-                    spkname = spkname
-            else:
-                continue
+                key = '_'.join([spkname, get_hash_str(wavname)])
+            assert spkname != ''
+            key = key + '_' + self.postfix
 
-            if sp[1] != 'engzo' and not wechat:
-                print self.G[i].strip(), " bad wav file name."
-                continue
-
-            uttname = sp[2]
-            spkuttname = wavname[:-4]
-            # print sp
-            if len(sp[0]) == 0 or len(uttname)==0 or len(spkuttname) == 0:
-                print self.G[i].strip(), " bad wav file name."
-                continue
-
-            if self.G[i].strip()[-4:] != ".wav":
-                print self.G[i].strip(), " is not correct wav file name."
-                continue
-
-            if self.TspDict.has_key(spkuttname):
-                key = spkname + '_' + spkuttname.replace('.', '_') + "_" + self.postfix
+            if self.trans.has_key(wavname):
                 if not utt2spk.has_key(spkname):
                     utt2spk[spkname] = []
                 utt2spk[spkname].append(key)
 
-                print >> self.O, "%s %s" %(key, self.TspDict[spkuttname])
-                print >> self.P, "%s %s" %(key, self.G[i].strip())
+                print >> self.text, "%s %s" %(key, self.trans[wavname])
+                print >> self.wavscp, "%s %s" %(key, self.wavlist[i].strip())
             else:
                 no_tsp_num += 1
-                #print "%s no trans for sent utt: %s" %(self.postfix, spkuttname)
+                print "WARNING: No trans for utt: %s" %(wavname)
 
-            if i % 100000 == 0 :
-                print " make_trans.py has process %f" % (float(i)/self.G.__len__())
+            if i % 10000 == 0 :
+                print " make_trans.py has process %.3f" % (float(i)/self.wavlist.__len__())
         for spkname in sorted(utt2spk.keys()):
             utts = utt2spk[spkname]
             assert len(utts) > 0
             for utt in utts:
-                print >>self.U, '%s %s' % (utt, spkname)
+                print >>self.utt2spk, '%s %s' % (utt, spkname)
 
-        print "%s wavs have no transcriptions. percent %.3f" %(no_tsp_num, no_tsp_num*100.0/self.G.__len__())
+        print "%s wavs have no transcriptions. percent %.3f" %(no_tsp_num, no_tsp_num*100.0/self.wavlist.__len__())
 
-        self.O.close()
-        self.P.close()
-        self.U.close()
+        self.text.close()
+        self.wavscp.close()
+        self.utt2spk.close()
 
 
 if __name__ == "__main__":
+    usage = '%prog [options] postfix in_flist input_snr out_txt out_scp utt2spk '
+    parser = OptionParser(usage)
+    parser.add_option('--fix-trans', dest='fix_trans', default=False)
+    parser.add_option('--corpus', dest='corpus', default='')
+    (opt, argv) = parser.parse_args()
 
-    if len(sys.argv) == 8:
-        wechat = (sys.argv[7] == 'True')
-    print "Wechat =", wechat
-
-    MakeTrans(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6])
-    print " Done. "
+    if opt.fix_trans == 'True':
+        assert len(argv) == 2
+        FixTrans(argv[0], argv[1])
+    else:
+        if len(argv) != 6:
+            print parser.print_help()
+            exit(-1)
+        assert opt.corpus
+        corpus_type = opt.corpus
+        if corpus_type not in corpus_types:
+            print "Error corpus type, must be one of", corpus_types
+            exit(-1)
+        MakeTrans(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5])
+    print __file__, " Done. "
 
 

@@ -11,7 +11,7 @@
 # Begin configuration
 train=false
 test=false
-type=1
+corpus="openasr"
 
 data=data
 # End configuration.
@@ -22,11 +22,6 @@ echo "$0 $@"  # Print the command line for logging
 . parse_options.sh || exit 1;
 
 if [ $# -ne 1 ]; then
- 	echo "Argument should be the Corpus directory."
- 	exit 1;
-fi 
-
-if [ $# != 1 ]; then
    echo "usage: local/std_prepare_data.sh <corpus-dir>"
    echo "e.g.:  local/std_prepare_data.sh /data/voxpop"
    echo "main options (for others, see top of script file)"
@@ -73,12 +68,15 @@ mkdir -p $tmpdir
 
 if $train;then
 	echo "========================Train==========================="
+	if [ ! -f $ROOTCORPUS/doc/all_trans.txt.back ];then
+		cp $ROOTCORPUS/doc/all_trans.txt $ROOTCORPUS/doc/all_trans.txt.back
+		local/make_trans.py --fix-trans True $ROOTCORPUS/doc/all_trans.txt $ROOTCORPUS/doc/all_trans.txt || exit 1;
+	fi
 	find $ROOTCORPUS/data/train -iname "*.wav" | sort > $tmpdir/train.flist
 	dir=$data/train
 	mkdir -p $dir ### 句子的标识ID为 ： data/train/speakerID/sentenceID -> speakerID_sentenceID_trn
-	local/make_trans.py --type $type trn $tmpdir/train.flist $ROOTCORPUS/doc/all_trans.txt >(sort -k1 >$dir/text) \
+	local/make_trans.py --corpus $corpus trn $tmpdir/train.flist $ROOTCORPUS/doc/all_trans.txt >(sort -k1 >$dir/text) \
 		>(sort -k1 >$dir/wav.scp) $dir/utt2spk || exit 1;
-    fi
 	sleep 2
 	utils/utt2spk_to_spk2utt.pl $dir/utt2spk > $dir/spk2utt || exit 1;
 fi
@@ -89,12 +87,13 @@ if $test;then
 	dir=$data/test
 	mkdir -p $dir
 
-	local/make_trans.py --type $type tst $tmpdir/test.flist $ROOTCORPUS/doc/all_trans.txt >(sort -k1 >$dir/text) \
+	local/make_trans.py --corpus $corpus tst $tmpdir/test.flist $ROOTCORPUS/doc/all_trans.txt >(sort -k1 >$dir/text) \
 		>(sort -k1 >$dir/wav.scp) $dir/utt2spk || exit 1;
+	sleep 2
 	utils/utt2spk_to_spk2utt.pl $dir/utt2spk > $dir/spk2utt || exit 1;
 fi
 
-echo "##### $0 std_prepare_data.sh succeeded."
+echo "##### $0 succeeded."
 
 exit 0;
 
