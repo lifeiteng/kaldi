@@ -14,6 +14,21 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 
+
+def AllSuccess(dir, iter, processes):
+    all_success = True
+    for process in processes:
+        process.wait()
+        [stdout_value, stderr_value] = process.communicate()
+        print(stderr_value)
+        if process.returncode != 0:
+            all_success = False
+
+    if not all_success:
+        open('{0}/.error'.format(dir), 'w').close()
+        raise Exception("There was error during training iteration {0}".format(iter))
+
+
 def SendMail(message, subject, email_id):
     try:
         subprocess.Popen('echo "{message}" | mail -s "{subject}" {email} '.format(
@@ -570,8 +585,8 @@ def CombineModels(dir, num_iters, num_iters_combine, egs_dir,
     RunKaldiCommand("""
 {command} {combine_queue_opt} {dir}/log/combine.log \
 nnet3-combine --num-iters=40 \
-   --enforce-sum-to-one=true --enforce-positive-weights=true \
-   --verbose=3 {raw_models} "ark,bg:nnet3-merge-egs --measure-output-frames=false --minibatch-size={mbsize} ark:{egs_dir}/combine.egs ark:-|" \
+--enforce-sum-to-one=true --enforce-positive-weights=true \
+--verbose=3 {raw_models} "ark,bg:nnet3-merge-egs --measure-output-frames=false --minibatch-size={mbsize} ark:{egs_dir}/combine.egs ark:-|" \
 "|nnet3-am-copy --set-raw-nnet=- {dir}/{num_iters}.mdl {dir}/combined.mdl"
     """.format(command = run_opts.command,
                combine_queue_opt = run_opts.combine_queue_opt,
@@ -597,21 +612,26 @@ def ComputeAveragePosterior(dir, iter, egs_dir, num_archives,
         egs_part = 1
     else:
         egs_part = 'JOB'
-
-    RunKaldiCommand("""
-{command} JOB=1:{num_jobs_compute_prior} {prior_queue_opt} {dir}/log/get_post.{iter}.JOB.log \
-    nnet3-subset-egs --srand=JOB --n={prior_subset_size} ark:{egs_dir}/egs.{egs_part}.ark ark:- \| \
-    nnet3-merge-egs --measure-output-frames=true --minibatch-size=128 ark:- ark:- \| \
-    nnet3-compute-from-egs {prior_gpu_opt} --apply-exp=true \
-  "nnet3-am-copy --raw=true {dir}/combined.mdl -|" ark:- ark:- \| \
+    processes = []
+    for i in range(1, run_opts.num_jobs_compute_prior + 1):
+        logger.info("Run {job_id} job ...".format(job_id=i))
+        process_handle = RunKaldiCommand("""
+{command} JOB={job_id}:{job_id} {prior_queue_opt} {dir}/log/get_post.{iter}.JOB.log \
+nnet3-subset-egs --srand=JOB --n={prior_subset_size} ark:{egs_dir}/egs.{egs_part}.ark ark:- \| \
+nnet3-merge-egs --measure-output-frames=true --minibatch-size=128 ark:- ark:- \| \
+nnet3-compute-from-egs {prior_gpu_opt} --apply-exp=true \
+"nnet3-am-copy --raw=true {dir}/combined.mdl -|" ark:- ark:- \| \
 matrix-sum-rows ark:- ark:- \| vector-sum ark:- {dir}/post.{iter}.JOB.vec
-    """.format(command = run_opts.command,
-               dir = dir,
-               num_jobs_compute_prior = run_opts.num_jobs_compute_prior,
-               prior_queue_opt = run_opts.prior_queue_opt,
-               iter = iter, prior_subset_size = prior_subset_size,
-               egs_dir = egs_dir, egs_part = egs_part,
-               prior_gpu_opt = run_opts.prior_gpu_opt))
+        """.format(command = run_opts.command,
+                   dir = dir,
+                   job_id = i,
+                   prior_queue_opt = run_opts.prior_queue_opt,
+                   iter = iter, prior_subset_size = prior_subset_size,
+                   egs_dir = egs_dir, egs_part = egs_part,
+                   prior_gpu_opt = run_opts.prior_gpu_opt), wait = False)
+        time.sleep(2)
+        processes.append(process_handle)
+    AllSuccess(dir, iter, processes)
 
     # make sure there is time for $dir/post.{iter}.*.vec to appear.
     time.sleep(5)
@@ -697,16 +717,3 @@ def WriteIdctMatrix(feat_dim, cepstral_lifter, file_path):
         idct_matrix[k].append(0)
     WriteKaldiMatrix(file_path, idct_matrix)
 
-
-def AllSuccess(dir, iter, processes):
-    all_success = True
-    for process in processes:
-        process.wait()
-        [stdout_value, stderr_value] = process.communicate()
-        print(stderr_value)
-        if process.returncode != 0:
-            all_success = False
-
-    if not all_success:
-        open('{0}/.error'.format(dir), 'w').close()
-        raise Exception("There was error during training iteration {0}".format(iter))
