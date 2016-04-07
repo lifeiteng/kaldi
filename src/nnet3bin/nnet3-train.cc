@@ -90,6 +90,7 @@ int main(int argc, char *argv[]) {
 #if HAVE_CUDA==1
     CuDevice::Instantiate().PrintProfile();
 #endif
+
     WriteKaldiObject(nnet, nnet_wxfilename, binary_write);
     KALDI_LOG << "Wrote model to " << nnet_wxfilename;
     return (ok ? 0 : 1);

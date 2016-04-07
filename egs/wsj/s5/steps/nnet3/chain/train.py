@@ -226,6 +226,10 @@ def GetArgs():
                         help="Specifies the stage of the experiment to execution from")
     parser.add_argument("--exit-stage", type=int, default=None,
                         help="If specified, training exits before running this stage")
+    parser.add_argument("--warm-iters", type=int, default=10,
+                        help="Run single job at begining")
+    parser.add_argument("--cv-period", type=int, default=10,
+                        help="Run Cv every period iter")
     parser.add_argument("--cmd", type=str, action = train_lib.NullstrToNoneAction, dest="command",
                         help="Specifies the script to launch jobs."
                         " e.g. queue.pl for launching on SGE cluster run.pl"
@@ -233,6 +237,15 @@ def GetArgs():
     parser.add_argument("--use-gpu", type=str, action = train_lib.StrToBoolAction,
                         choices = ["true", "false"],
                         help="Use GPU for training", default=True)
+    parser.add_argument("--gpus", type=str, action = train_lib.NullstrToNoneAction,
+                        dest = "gpus",
+                        help="Use GPUs for training, eg. '0 1 2' ", default="-1")
+    parser.add_argument("--sudo-passward", type=str, action = train_lib.NullstrToNoneAction,
+                        dest = "passward",
+                        help="Your sudo passward", default="")
+    parser.add_argument("--gpus-wait", type=str, action = train_lib.StrToBoolAction,
+                        choices = ["true", "false"],
+                        help="Wait all gpus jobs finish", default=True)
     parser.add_argument("--cleanup", type=str, action = train_lib.StrToBoolAction,
                         choices = ["true", "false"],
                         help="Clean up models after training", default=True)
@@ -307,6 +320,27 @@ def ProcessArgs(args):
         run_opts.parallel_train_opts = "--use-gpu=no"
         run_opts.combine_queue_opt = ""
 
+    if args.use_gpu and args.gpus:
+        run_opts.gpus = args.gpus.split()
+        run_opts.num_gpus = len(run_opts.gpus)
+        run_opts.gpus_wait = args.gpus_wait
+        if not args.passward:
+            raise Exception("You must set '--sudo-passward' if you use '--gpus'")
+        run_opts.passward = args.passward
+    else:
+        run_opts.gpus = ['-1']
+        run_opts.num_gpus = 1
+
+    run_opts.cv_period = args.cv_period
+
+    if '-1' not in run_opts.gpus:
+        if args.gpus_wait:
+            for gid in run_opts.gpus:
+                subprocess.call('echo {passward} | sudo -S nvidia-smi -i {gpu_id} -c 1'.format(passward=run_opts.passward, gpu_id=gid), shell=True)
+        else:
+            for gid in run_opts.gpus:
+                subprocess.call('echo {passward} | sudo -S nvidia-smi -i {gpu_id} -c 0'.format(passward=run_opts.passward, gpu_id=gid), shell=True)
+
     run_opts.command = args.command
 
     return [args, run_opts]
@@ -318,7 +352,11 @@ class RunOpts:
         self.train_queue_opt = None
         self.combine_queue_opt = None
         self.parallel_train_opts = None
-
+        self.num_gpus = None
+        self.gpus = None
+        self.gpus_wait = None
+        self.passward = None
+        self.cv_period = 1
 
 def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
                    raw_model_string, egs_dir,
@@ -342,18 +380,23 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
         deriv_time_opts += " --optimization.max-deriv-time={0}".format(int(chunk-width-right_deriv_truncate))
 
     processes = []
-    for job in range(1,num_jobs+1):
-        k = num_archives_processed + job - 1 # k is a zero-based index that we will derive
-                                               # the other indexes from.
-        archive_index = (k % num_archives) + 1 # work out the 1-based archive index.
-        frame_shift = (archive_index + k/num_archives) % frame_subsampling_factor
-        # previous : frame_shift = (k/num_archives) % frame_subsampling_factor
-        if job == 1:
-            cur_cache_io_opts = cache_io_opts + " --write-cache={dir}/cache.{next_iter}".format(dir = dir, next_iter = iter + 1)
-        else:
-            cur_cache_io_opts = cache_io_opts
+    job = 1
+    while job < num_jobs+1:
+        gpu_processes = []
+        for i in run_opts.gpus: # TODO queue gpu set up
+            if job >= num_jobs + 1:
+                break
+            k = num_archives_processed + job - 1 # k is a zero-based index that we will derive
+                                                   # the other indexes from.
+            archive_index = (k % num_archives) + 1 # work out the 1-based archive index.
+            frame_shift = (archive_index + k/num_archives) % frame_subsampling_factor
+            # previous : frame_shift = (k/num_archives) % frame_subsampling_factor
+            if job == 1:
+                cur_cache_io_opts = cache_io_opts + " --write-cache={dir}/cache.{next_iter}".format(dir = dir, next_iter = iter + 1)
+            else:
+                cur_cache_io_opts = cache_io_opts
 
-        process_handle = train_lib.RunKaldiCommand("""
+            process_handle = train_lib.RunKaldiCommand("""
 {command} {train_queue_opt} {dir}/log/train.{iter}.{job}.log \
   nnet3-chain-train {parallel_train_opts} \
   --apply-deriv-weights={app_deriv_wts} \
@@ -364,37 +407,31 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
    "{raw_model}" {dir}/den.fst \
   "ark,bg:nnet3-chain-copy-egs --truncate-deriv-weights={trunc_deriv} --frame-shift={fr_shft} ark:{egs_dir}/cegs.{archive_index}.ark ark:- | nnet3-chain-shuffle-egs --buffer-size={shuffle_buffer_size} --srand={iter} ark:- ark:-| nnet3-chain-merge-egs --minibatch-size={num_chunk_per_minibatch} ark:- ark:- |" \
   {dir}/{next_iter}.{job}.raw
-          """.format(command = run_opts.command,
-                     train_queue_opt = run_opts.train_queue_opt,
-                     dir = dir, iter = iter, next_iter = iter + 1, job = job,
-                     deriv_time_opts = deriv_time_opts,
-                     trunc_deriv = truncate_deriv_weights,
-                     app_deriv_wts = apply_deriv_weights,
-                     fr_shft = frame_shift, l2 = l2_regularize,
-                     xent_reg = xent_regularize, leaky = leaky_hmm_coefficient,
-                     parallel_train_opts = run_opts.parallel_train_opts,
-                     momentum = momentum, max_param_change = max_param_change,
-                     raw_model = raw_model_string,
-                     egs_dir = egs_dir, archive_index = archive_index,
-                     shuffle_buffer_size = shuffle_buffer_size,
-                     cache_io_opts = cur_cache_io_opts,
-                     num_chunk_per_minibatch = num_chunk_per_minibatch),
-          wait = False)
+                """.format(command = run_opts.command,
+                         train_queue_opt = run_opts.train_queue_opt,
+                         dir = dir, iter = iter, next_iter = iter + 1, job = job,
+                         deriv_time_opts = deriv_time_opts,
+                         trunc_deriv = truncate_deriv_weights,
+                         app_deriv_wts = apply_deriv_weights,
+                         fr_shft = frame_shift, l2 = l2_regularize,
+                         xent_reg = xent_regularize, leaky = leaky_hmm_coefficient,
+                         parallel_train_opts = run_opts.parallel_train_opts + " --gpu-id=" + str(i),
+                         momentum = momentum, max_param_change = max_param_change,
+                         raw_model = raw_model_string,
+                         egs_dir = egs_dir, archive_index = archive_index,
+                         shuffle_buffer_size = shuffle_buffer_size,
+                         cache_io_opts = cur_cache_io_opts,
+                         num_chunk_per_minibatch = num_chunk_per_minibatch),
+                wait = False)
 
-        processes.append(process_handle)
+            job += 1
+            gpu_processes.append(process_handle)
 
-    all_success = True
-    for process in processes:
-        process.wait()
-        [stdout_value, stderr_value] = process.communicate()
-        if stderr_value.strip() != '':
-            print(stderr_value)
-        if process.returncode != 0:
-            all_success = False
-
-    if not all_success:
-        open('{0}/.error'.format(dir), 'w').close()
-        raise Exception("There was error during training iteration {0}".format(iter))
+        if run_opts.gpus_wait:
+            train_lib.AllSuccess(dir, iter, gpu_processes)
+        else:
+            processes.extend(gpu_processes)
+    train_lib.AllSuccess(dir, iter, processes)
 
 def TrainOneIteration(dir, iter, egs_dir,
                       num_jobs, num_archives_processed, num_archives,
@@ -409,12 +446,12 @@ def TrainOneIteration(dir, iter, egs_dir,
     # Set off jobs doing some diagnostics, in the background.
     # Use the egs dir from the previous iteration for the diagnostics
     logger.info("Training neural net (pass {0})".format(iter))
-
-    chain_lib.ComputeTrainCvProbabilities(dir, iter, egs_dir,
-            l2_regularize, xent_regularize, leaky_hmm_coefficient, run_opts)
-
-    if iter > 0:
-        chain_lib.ComputeProgress(dir, iter, run_opts)
+    
+    if iter % run_opts.cv_period == 0:
+        chain_lib.ComputeTrainCvProbabilities(dir, iter, egs_dir,
+                l2_regularize, xent_regularize, leaky_hmm_coefficient, run_opts)
+        if iter > 0:
+            chain_lib.ComputeProgress(dir, iter, run_opts)
 
     if iter > 0 and (iter <= (num_hidden_layers-1) * add_layers_period) and (iter % add_layers_period == 0):
 

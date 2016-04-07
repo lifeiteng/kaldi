@@ -386,20 +386,6 @@ class RunOpts:
         self.cv_period = 1
 
 
-def AllSuccess(dir, iter, processes):
-    all_success = True
-    for process in processes:
-        process.wait()
-        [stdout_value, stderr_value] = process.communicate()
-        print(stderr_value)
-        if process.returncode != 0:
-            all_success = False
-
-    if not all_success:
-        open('{0}/.error'.format(dir), 'w').close()
-        raise Exception("There was error during training iteration {0}".format(iter))
-
-
 def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
                    raw_model_string, egs_dir,
                    left_context, right_context, min_deriv_time,

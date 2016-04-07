@@ -697,3 +697,16 @@ def WriteIdctMatrix(feat_dim, cepstral_lifter, file_path):
         idct_matrix[k].append(0)
     WriteKaldiMatrix(file_path, idct_matrix)
 
+
+def AllSuccess(dir, iter, processes):
+    all_success = True
+    for process in processes:
+        process.wait()
+        [stdout_value, stderr_value] = process.communicate()
+        print(stderr_value)
+        if process.returncode != 0:
+            all_success = False
+
+    if not all_success:
+        open('{0}/.error'.format(dir), 'w').close()
+        raise Exception("There was error during training iteration {0}".format(iter))
