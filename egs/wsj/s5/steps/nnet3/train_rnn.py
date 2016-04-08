@@ -544,7 +544,7 @@ nnet3-am-copy --scale={shrink} --set-raw-nnet=- {dir}/{iter}.mdl {dir}/{new_iter
         if cache_read_opt:
             os.remove("{dir}/cache.{iter}".format(dir=dir, iter=iter))
     except OSError:
-        raise Exception("Error while trying to delete the cache file")
+        pass
 
 
 
