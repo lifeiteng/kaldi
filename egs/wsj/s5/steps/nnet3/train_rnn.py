@@ -709,11 +709,14 @@ def Train(args, run_opts):
             if args.email is not None:
                 reporting_iter_interval = num_iters * args.reporting_interval
                 if iter % reporting_iter_interval == 0:
-                # lets do some reporting
-                    [report, times, data] = nnet3_log_parse.GenerateAccuracyReport(args.dir)
-                    message = report
-                    subject = "Update : Expt {dir} : Iter {iter}".format(dir = args.dir, iter = iter)
-                    SendMail(message, subject, args.email)
+                    # lets do some reporting
+                    try:
+                        [report, times, data] = nnet3_log_parse.GenerateAccuracyReport(args.dir)
+                        message = report
+                        subject = "Update : Expt {dir} : Iter {iter}".format(dir = args.dir, iter = iter)
+                        SendMail(message, subject, args.email)
+                    except Exception as e:
+                        pass
 
         num_archives_processed = num_archives_processed + current_num_jobs
 
