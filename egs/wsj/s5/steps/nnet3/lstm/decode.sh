@@ -135,15 +135,19 @@ if [ ! -z "$online_ivector_dir" ]; then
 fi
 
 if [ $stage -le 1 ]; then
-  $cmd --num-threads $num_threads JOB=1:$nj $dir/log/decode.JOB.log \
-    nnet3-latgen-faster$thread_string $ivector_opts \
-     --frames-per-chunk=$frames_per_chunk \
-     --minimize=$minimize --max-active=$max_active --min-active=$min_active --beam=$beam \
-     --lattice-beam=$lattice_beam --acoustic-scale=$acwt --allow-partial=true \
-     --extra-left-context=$extra_left_context \
-     --extra-right-context=$extra_right_context \
-     --word-symbol-table=$graphdir/words.txt "$model" \
-     $graphdir/HCLG.fst "$feats" "ark:|gzip -c > $dir/lat.JOB.gz" || exit 1;
+  for n in $(seq $nj);do
+    $cmd --num-threads $num_threads JOB=$n:$n $dir/log/decode.JOB.log \
+      nnet3-latgen-faster$thread_string $ivector_opts \
+       --frames-per-chunk=$frames_per_chunk \
+       --minimize=$minimize --max-active=$max_active --min-active=$min_active --beam=$beam \
+       --lattice-beam=$lattice_beam --acoustic-scale=$acwt --allow-partial=true \
+       --extra-left-context=$extra_left_context \
+       --extra-right-context=$extra_right_context \
+       --word-symbol-table=$graphdir/words.txt "$model" \
+       $graphdir/HCLG.fst "$feats" "ark:|gzip -c > $dir/lat.JOB.gz" || exit 1 &
+    sleep 2
+  done
+  wait
 fi
 
 # The output of this script is the files "lat.*.gz"-- we'll rescore this at
