@@ -147,6 +147,7 @@ def GenerateAccuracyPlots(exp_dir, output_dir, plot, key = 'accuracy', file_base
         fig.suptitle("{0} plot".format(key))
         figfile_name = '{0}/{1}.pdf'.format(output_dir, file_basename)
         plt.savefig(figfile_name, bbox_extra_artists=(lgd,), bbox_inches='tight')
+        plt.savefig(figfile_name.replace(".pdf", '.png'), bbox_extra_artists=(lgd,), bbox_inches='tight')
         if latex_report is not None:
             latex_report.AddFigure(figfile_name, "Plot of {0} vs iterations".format(key))
 
