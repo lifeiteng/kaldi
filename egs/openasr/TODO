@@ -1,0 +1,7 @@
+
+
+
+egs/babel/s5b/local/prepare_kaldi_lm_from_training_text.sh
+egs/ami/s5/local/score.sh                                      |   1 +
+egs/ami/s5/local/score_asclite.sh                              |  30 +++--
+egs/ami/s5/local/sort_bad_utts.py
