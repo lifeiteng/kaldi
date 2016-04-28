@@ -411,7 +411,8 @@ def AddGruLayer(config_lines,
                 clipping_threshold = 1.0,
                 norm_based_clipping = "false",
                 ng_affine_options = "",
-                gru_delay = -1):
+                gru_delay = -1,
+                self_repair_scale= None):
     assert(recurrent_projection_dim > 0 and non_recurrent_projection_dim > 0)
     components = config_lines['components']
     component_nodes = config_lines['component-nodes']
@@ -419,6 +420,8 @@ def AddGruLayer(config_lines,
     input_descriptor = input['descriptor']
     input_dim = input['dimension']
     name = name.strip()
+
+    self_repair_string = "self-repair-scale={0:.10f}".format(self_repair_scale) if self_repair_scale is not None else ''
 
     # Parameter Definitions of affine matrix W_*-xh for reset gate r(t) and update gate z(t)
     components.append("# Define affine matrices for reset gate and update gate: W_*-xh")
@@ -435,9 +438,9 @@ def AddGruLayer(config_lines,
     components.append("component name={0}_W_lowrank_h-h type=NaturalGradientAffineComponent input-dim={1} output-dim={2} {3}".format(name, recurrent_projection_dim, recurrent_projection_dim / 4, ng_affine_options))
 
     components.append("# Defining the non-linearities")
-    components.append("component name={0}_r type=SigmoidComponent dim={1}".format(name, recurrent_projection_dim))
-    components.append("component name={0}_z type=SigmoidComponent dim={1}".format(name, recurrent_projection_dim))
-    components.append("component name={0}_h_tilt type=TanhComponent dim={1}".format(name, recurrent_projection_dim))
+    components.append("component name={0}_r type=SigmoidComponent dim={1} {2}".format(name, recurrent_projection_dim, self_repair_string))
+    components.append("component name={0}_z type=SigmoidComponent dim={1} {2}".format(name, recurrent_projection_dim, self_repair_string))
+    components.append("component name={0}_h_tilt type=TanhComponent dim={1} {2}".format(name, recurrent_projection_dim, self_repair_string))
 
     components.append("# Defining the hidden node computations")
     components.append("component name={0}_rh type=ElementwiseProductComponent input-dim={1} output-dim={2}".format(name, 2 * recurrent_projection_dim, recurrent_projection_dim))
@@ -478,7 +481,7 @@ def AddGruLayer(config_lines,
     
     components.append("# projection matrices : W-m; and nonlinearity transform : relu and renorm")
     components.append("component name={0}_W-m type=NaturalGradientAffineComponent input-dim={1} output-dim={2} bias-stddev=0".format(name, recurrent_projection_dim, non_recurrent_projection_dim))
-    components.append("component name={0}_relu type=RectifiedLinearComponent dim={1}".format(name, non_recurrent_projection_dim))
+    components.append("component name={0}_relu type=RectifiedLinearComponent dim={1} {2}".format(name, non_recurrent_projection_dim, self_repair_string))
     components.append("component name={0}_renorm type=NormalizeComponent dim={1} target-rms=1.0".format(name, non_recurrent_projection_dim))
 
     component_nodes.append("# h_t and p_t")

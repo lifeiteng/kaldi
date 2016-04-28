@@ -227,7 +227,7 @@ def MakeConfigs(config_dir, feat_dim, ivector_dim, num_targets,
     prev_layer_output = nodes.AddLdaLayer(config_lines, "L0", prev_layer_output, config_dir + '/lda.mat')
 
     for i in range(num_lstm_layers):
-	if len(lstm_delay[i]) == 2: # BLSTM layer case, add both forward and backward
+        if len(lstm_delay[i]) == 2: # BLSTM layer case, add both forward and backward
             prev_layer_output1 = nodes.AddLstmLayer(config_lines, "BLstm{0}_forward".format(i+1), prev_layer_output, cell_dim,
                                              recurrent_projection_dim, non_recurrent_projection_dim,
                                              clipping_threshold, norm_based_clipping,
@@ -239,13 +239,13 @@ def MakeConfigs(config_dir, feat_dim, ivector_dim, num_targets,
                                              ng_per_element_scale_options, ng_affine_options,
                                              lstm_delay = lstm_delay[i][1], self_repair_scale = self_repair_scale)
             prev_layer_output['descriptor'] = 'Append({0}, {1})'.format(prev_layer_output1['descriptor'], prev_layer_output2['descriptor'])
-	    prev_layer_output['dimension'] = prev_layer_output1['dimension'] + prev_layer_output2['dimension']
-	else: # LSTM layer case
-	    prev_layer_output = nodes.AddLstmLayer(config_lines, "Lstm{0}".format(i+1), prev_layer_output, cell_dim,
-			                    recurrent_projection_dim, non_recurrent_projection_dim,
-					    clipping_threshold, norm_based_clipping,
-					    ng_per_element_scale_options, ng_affine_options,
-					    lstm_delay = lstm_delay[i][0], self_repair_scale = self_repair_scale)
+            prev_layer_output['dimension'] = prev_layer_output1['dimension'] + prev_layer_output2['dimension']
+        else: # LSTM layer case
+            prev_layer_output = nodes.AddLstmLayer(config_lines, "Lstm{0}".format(i+1), prev_layer_output, cell_dim,
+                                            recurrent_projection_dim, non_recurrent_projection_dim,
+                                            clipping_threshold, norm_based_clipping,
+                                            ng_per_element_scale_options, ng_affine_options,
+                                            lstm_delay = lstm_delay[i][0], self_repair_scale = self_repair_scale)
         # make the intermediate config file for layerwise discriminative
         # training
         nodes.AddFinalLayer(config_lines, prev_layer_output, num_targets, ng_affine_options, label_delay = label_delay, include_log_softmax = include_log_softmax)
@@ -258,10 +258,10 @@ def MakeConfigs(config_dir, feat_dim, ivector_dim, num_targets,
 
         config_files['{0}/layer{1}.config'.format(config_dir, i+1)] = config_lines
         config_lines = {'components':[], 'component-nodes':[]}
-	if len(lstm_delay[i]) == 2:
-	    # since the form 'Append(Append(xx, yy), zz)' is not allowed, here we don't wrap the descriptor with 'Append()' so that we would have the form
-	    # 'Append(xx, yy, zz)' in the next lstm layer
-	    prev_layer_output['descriptor'] = '{0}, {1}'.format(prev_layer_output1['descriptor'], prev_layer_output2['descriptor'])
+        if len(lstm_delay[i]) == 2:
+            # since the form 'Append(Append(xx, yy), zz)' is not allowed, here we don't wrap the descriptor with 'Append()' so that we would have the form
+            # 'Append(xx, yy, zz)' in the next lstm layer
+            prev_layer_output['descriptor'] = '{0}, {1}'.format(prev_layer_output1['descriptor'], prev_layer_output2['descriptor'])
 
     if len(lstm_delay[i]) == 2:
         # since there is no 'Append' in 'AffRelNormLayer', here we wrap the descriptor with 'Append()'
