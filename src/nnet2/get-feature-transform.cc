@@ -42,8 +42,6 @@ void FeatureTransformEstimate::Estimate(const FeatureTransformEstimateOptions &o
       (*M)(i, i) = 1.0 / std::sqrt(total_covar(i, i));
     }
     KALDI_LOG << "The Scale Matrix is: " << *M;
-    // M->Power(0.5);
-    // KALDI_LOG << "After Sqrt, M is: " << *M;
     KALDI_LOG << "Total mean is: " << total_mean;
     AddMeanOffset(total_mean, M);
     KALDI_LOG << "The final cmvn 'lda' Matrix is: " << *M;
