@@ -131,13 +131,17 @@ if [ -f $srcdir/frame_subsampling_factor ]; then
 fi
 
 if [ $stage -le 0 ]; then
-  $cmd $parallel_opts JOB=1:$nj $dir/log/decode.JOB.log \
-    $decoder $opts $silence_weighting_opts --do-endpointing=$do_endpointing $frame_subsampling_opt \
-     --config=$online_config \
-     --max-active=$max_active --beam=$beam --lattice-beam=$lattice_beam \
-     --acoustic-scale=$acwt --word-symbol-table=$graphdir/words.txt \
-     $srcdir/${iter}.mdl $graphdir/HCLG.fst $spk2utt_rspecifier "$wav_rspecifier" \
-      "$lat_wspecifier" || exit 1;
+  for n in $(seq $nj);do
+    $cmd $parallel_opts JOB=$n:$n $dir/log/decode.JOB.log \
+      $decoder $opts $silence_weighting_opts --do-endpointing=$do_endpointing $frame_subsampling_opt \
+       --config=$online_config \
+       --max-active=$max_active --beam=$beam --lattice-beam=$lattice_beam \
+       --acoustic-scale=$acwt --word-symbol-table=$graphdir/words.txt \
+       $srcdir/${iter}.mdl $graphdir/HCLG.fst $spk2utt_rspecifier "$wav_rspecifier" \
+        "$lat_wspecifier" || exit 1 &
+    sleep 2
+  done
+  wait
 fi
 
 if ! $skip_scoring ; then
