@@ -20,6 +20,9 @@ rm_oov = (opt.oov == 'True')
 
 if rm_oov:
     assert len(argv) == 3
+    # num_oov = 0
+    oov_utt = 0;
+    oov_words = set()
     print "dict text clean_text"
     zidian = dict()
     with open(argv[0]) as f:
@@ -31,10 +34,16 @@ if rm_oov:
         for line in trans_lines:
             line = line.strip()
             splits = line.split()
+            ssp = ' '.join(splits[1:]).replace('-', ' ').split()
+            splits = [splits[0]]
+            splits.extend(ssp)
+
             has_oov = False
             for i in range(1, len(splits)):
                 if not zidian.has_key(splits[i].lower()):
-                    print "OOV[%s] in [%s]" % (splits[i].lower(), ' '.join(splits[1:]).lower())
+                    oov_utt += 1
+                    oov_words.add(splits[i].lower())
+                    # print "OOV[%s] in [%s]" % (splits[i].lower(), ' '.join(splits[1:]).lower())
                     has_oov = True
                     break
             if not has_oov:
@@ -42,6 +51,7 @@ if rm_oov:
                     print >> tf, splits[0], ' '.join(splits[1:]).lower()
                 else:
                     print >> tf, splits[0], ' '.join(splits[1:])
+    print "%d utt has OOV!" % (oov_utt), oov_words, len(oov_words)
 
 elif to_lower:
     lines = open(argv[0]).readlines()
