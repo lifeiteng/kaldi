@@ -440,7 +440,6 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
 
             job += 1
             gpu_processes.append(process_handle)
-
         if run_opts.gpus_wait:
             AllSuccess(dir, iter, gpu_processes)
         else:
@@ -540,12 +539,8 @@ nnet3-am-copy --scale={shrink} --set-raw-nnet=- {dir}/{iter}.mdl {dir}/{new_iter
         raise Exception("Could not find {0}, at the end of iteration {1}".format(new_model, iter))
     elif os.stat(new_model).st_size == 0:
         raise Exception("{0} has size 0. Something went wrong in iteration {1}".format(new_model, iter))
-    try:
-        if cache_read_opt:
-            os.remove("{dir}/cache.{iter}".format(dir=dir, iter=iter))
-    except OSError:
-        pass
-
+    if cache_read_opt and os.path.exists("{0}/cache.{1}".format(dir, iter)):
+        os.remove("{0}/cache.{1}".format(dir, iter))
 
 
 # args is a Namespace with the required parameters
@@ -709,11 +704,14 @@ def Train(args, run_opts):
             if args.email is not None:
                 reporting_iter_interval = num_iters * args.reporting_interval
                 if iter % reporting_iter_interval == 0:
-                # lets do some reporting
-                    [report, times, data] = nnet3_log_parse.GenerateAccuracyReport(args.dir)
-                    message = report
-                    subject = "Update : Expt {dir} : Iter {iter}".format(dir = args.dir, iter = iter)
-                    SendMail(message, subject, args.email)
+                    # lets do some reporting
+                    try:
+                        [report, times, data] = nnet3_log_parse.GenerateAccuracyReport(args.dir)
+                        message = report
+                        subject = "Update : Expt {dir} : Iter {iter}".format(dir = args.dir, iter = iter)
+                        SendMail(message, subject, args.email)
+                    except Exception as e:
+                        pass
 
         num_archives_processed = num_archives_processed + current_num_jobs
 

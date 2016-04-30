@@ -103,14 +103,20 @@ cmvn_opts=  # will be passed to get_lda.sh and get_egs.sh, if supplied.
             # only relevant for "raw" features, not lda.
 feat_type=raw  # or set to 'lda' to use LDA features.
 align_cmd=              # The cmd that is passed to steps/nnet2/align.sh
-align_use_gpu=          # Passed to use_gpu in steps/nnet2/align.sh [yes/no]
+align_use_gpu=yes          # Passed to use_gpu in steps/nnet2/align.sh [yes/no]
 realign_times=          # List of times on which we realign.  Each time is
                         # floating point number strictly between 0 and 1, which
                         # will be multiplied by the num-iters to get an iteration
                         # number.
-num_jobs_align=30       # Number of jobs for realignment
+num_jobs_align=6       # Number of jobs for realignment
 
 rand_prune=4.0 # speeds up LDA.
+
+sudo_password=""
+num_gpus=3
+cv_period=20
+
+glb_cmvn_lda=false
 
 # End configuration section.
 
@@ -288,6 +294,10 @@ context_opts="--left-context=$left_context --right-context=$right_context"
  "$0: Expected num_hidden_layers to be defined" && exit 1;
 
 [ -z "$transform_dir" ] && transform_dir=$alidir
+if $glb_cmvn_lda;then
+  cmvn_opts="--norm-means=false --norm-vars=false"
+  echo "cmvn will be done in lda.mat!!! reset cmvn_opts [$cmvn_opts] -> [$cmvn_opts]"
+fi
 
 if [ $stage -le -4 ] && [ -z "$egs_dir" ]; then
   extra_opts=()
@@ -362,7 +372,7 @@ if [ $stage -le -3 ]; then
   # Appendix C.6 of http://arxiv.org/pdf/1410.7455v6.pdf; it's a scaled variant
   # of an LDA transform but without dimensionality reduction.
   $cmd $dir/log/get_transform.log \
-     nnet-get-feature-transform $lda_opts $dir/lda.mat $dir/lda_stats || exit 1;
+     nnet-get-feature-transform --only-cmvn=$glb_cmvn_lda $lda_opts $dir/lda.mat $dir/lda_stats || exit 1;
 
   ln -sf ../lda.mat $dir/configs/lda.mat
 fi
@@ -471,10 +481,16 @@ done
 cur_egs_dir=$egs_dir
 [ -z $num_bptt_steps ] && num_bptt_steps=$chunk_width;
 min_deriv_time=$((chunk_width - num_bptt_steps))
+
+echo "$sudo_password" | sudo -S nvidia-smi -c 1
+
 while [ $x -lt $num_iters ]; do
   [ $x -eq $exit_stage ] && echo "$0: Exiting early due to --exit-stage $exit_stage" && exit 0;
 
   this_num_jobs=$(perl -e "print int(0.5+$num_jobs_initial+($num_jobs_final-$num_jobs_initial)*$x/$num_iters);")
+  if [ ! $this_num_jobs -eq 1 ] && [ $this_num_jobs -gt $num_gpus ] ;then
+    this_num_jobs=$(perl -e "print int(int($this_num_jobs/$num_gpus)*$num_gpus);")
+  fi
 
   ilr=$initial_effective_lrate; flr=$final_effective_lrate; np=$num_archives_processed; nt=$num_archives_to_process;
   this_effective_learning_rate=$(perl -e "print ($x + 1 >= $num_iters ? $flr : $ilr*exp($np*log($flr/$ilr)/$nt));");
@@ -503,6 +519,7 @@ while [ $x -lt $num_iters ]; do
       # always use the first egs archive, which makes the script simpler;
       # we're using different random subsets of it.
       rm $dir/post.$x.*.vec 2>/dev/null
+      echo "$sudo_password" | sudo -S nvidia-smi -c 0
       $cmd JOB=1:$num_jobs_compute_prior $dir/log/get_post.$x.JOB.log \
         nnet3-copy-egs --srand=JOB --frame=random $context_opts ark:$prev_egs_dir/egs.1.ark ark:- \| \
         nnet3-subset-egs --srand=JOB --n=$prior_subset_size ark:- ark:- \| \
@@ -522,9 +539,11 @@ while [ $x -lt $num_iters ]; do
 
       sleep 2
 
+      echo "$sudo_password" | sudo -S nvidia-smi -c 0
       steps/nnet3/align.sh --nj $num_jobs_align --cmd "$align_cmd" --use-gpu $align_use_gpu \
         --transform-dir "$transform_dir" --online-ivector-dir "$online_ivector_dir" \
         --iter $x $data $lang $dir $dir/ali_$time || exit 1
+      echo "$sudo_password" | sudo -S nvidia-smi -c 1
 
       steps/nnet3/relabel_egs.sh --cmd "$cmd" --iter $x $dir/ali_$time \
         $prev_egs_dir $cur_egs_dir || exit 1
@@ -534,23 +553,25 @@ while [ $x -lt $num_iters ]; do
       fi
     fi
 
-    # Set off jobs doing some diagnostics, in the background.
-    # Use the egs dir from the previous iteration for the diagnostics
-    $cmd $dir/log/compute_prob_valid.$x.log \
-      nnet3-compute-prob "nnet3-am-copy --raw=true $dir/$x.mdl - |" \
-            "ark,bg:nnet3-merge-egs ark:$cur_egs_dir/valid_diagnostic.egs ark:- |" &
-    $cmd $dir/log/compute_prob_train.$x.log \
-      nnet3-compute-prob "nnet3-am-copy --raw=true $dir/$x.mdl - |" \
-           "ark,bg:nnet3-merge-egs ark:$cur_egs_dir/train_diagnostic.egs ark:- |" &
+    if [ $[$x%${cv_period}] -eq 0 ];then
+      # Set off jobs doing some diagnostics, in the background.
+      # Use the egs dir from the previous iteration for the diagnostics
+      $cmd $dir/log/compute_prob_valid.$x.log \
+        nnet3-compute-prob "nnet3-am-copy --raw=true $dir/$x.mdl - |" \
+              "ark,bg:nnet3-merge-egs ark:$cur_egs_dir/valid_diagnostic.egs ark:- |" &
+      $cmd $dir/log/compute_prob_train.$x.log \
+        nnet3-compute-prob "nnet3-am-copy --raw=true $dir/$x.mdl - |" \
+             "ark,bg:nnet3-merge-egs ark:$cur_egs_dir/train_diagnostic.egs ark:- |" &
 
-    if [ $x -gt 0 ]; then
-      $cmd $dir/log/progress.$x.log \
-        nnet3-info "nnet3-am-copy --raw=true $dir/$x.mdl - |" '&&' \
-        nnet3-show-progress --use-gpu=no "nnet3-am-copy --raw=true $dir/$[$x-1].mdl - |" "nnet3-am-copy --raw=true $dir/$x.mdl - |" \
-        "ark,bg:nnet3-merge-egs --minibatch-size=256 ark:$cur_egs_dir/train_diagnostic.egs ark:-|" &
+      if [ $x -gt 0 ]; then
+        $cmd $dir/log/progress.$x.log \
+          nnet3-info "nnet3-am-copy --raw=true $dir/$x.mdl - |" '&&' \
+          nnet3-show-progress --use-gpu=no "nnet3-am-copy --raw=true $dir/$[$x-1].mdl - |" "nnet3-am-copy --raw=true $dir/$x.mdl - |" \
+          "ark,bg:nnet3-merge-egs --minibatch-size=256 ark:$cur_egs_dir/train_diagnostic.egs ark:-|" &
+      fi
     fi
 
-    echo "Training neural net (pass $x)"
+    echo "Training neural net (pass $x/${num_iters})"
 
     if [ $x -gt 0 ] && \
       [ $x -le $[($num_hidden_layers-1)*$add_layers_period] ] && \
@@ -591,26 +612,35 @@ while [ $x -lt $num_iters ]; do
       # to use for each job is a little complex, so we spawn each one separately.
       # this is no longer true for RNNs as we use do not use the --frame option
       # but we use the same script for consistency with FF-DNN code
-
-      for n in $(seq $this_num_jobs); do
-        k=$[$num_archives_processed + $n - 1]; # k is a zero-based index that we will derive
-                                               # the other indexes from.
-        archive=$[($k%$num_archives)+1]; # work out the 1-based archive index.
-        if [ $n -eq 1 ]; then
-          # an option for writing cache (storing pairs of nnet-computations and
-          # computation-requests) during training.
-          cache_write_opt=" --write-cache=$dir/cache.$[$x+1]"
-        else
-          cache_write_opt=""
-        fi
-        $cmd $train_queue_opt $dir/log/train.$x.$n.log \
-          nnet3-train $parallel_train_opts $cache_read_opt $cache_write_opt --print-interval=10 --momentum=$momentum \
-          --max-param-change=$max_param_change \
-          --optimization.min-deriv-time=$min_deriv_time "$raw" \
-          "ark,bg:nnet3-copy-egs $context_opts ark:$cur_egs_dir/egs.$archive.ark ark:- | nnet3-shuffle-egs --buffer-size=$shuffle_buffer_size --srand=$x ark:- ark:-| nnet3-merge-egs --minibatch-size=$this_num_chunk_per_minibatch --measure-output-frames=false --discard-partial-minibatches=true ark:- ark:- |" \
-          $dir/$[$x+1].$n.raw || touch $dir/.error &
+      n=1
+      while [ $n -le $this_num_jobs ]; do
+        for gpu_id in $(seq $num_gpus); do
+          if [ $n -le $this_num_jobs ]; then
+            k=$[$num_archives_processed + $n - 1]; # k is a zero-based index that we will derive
+                                                   # the other indexes from.
+            archive=$[($k%$num_archives)+1]; # work out the 1-based archive index.
+            if [ $n -eq 1 ]; then
+              # an option for writing cache (storing pairs of nnet-computations and
+              # computation-requests) during training.
+              cache_write_opt=" --write-cache=$dir/cache.$[$x+1]"
+            else
+              cache_write_opt=""
+            fi
+            $cmd $train_queue_opt $dir/log/train.$x.$n.log \
+              nnet3-train --gpu-id=$[$gpu_id-1] $parallel_train_opts $cache_read_opt $cache_write_opt \
+              --print-interval=20 --momentum=$momentum \
+              --max-param-change=$max_param_change \
+              --optimization.min-deriv-time=$min_deriv_time "$raw" \
+              "ark,bg:nnet3-copy-egs $context_opts ark:$cur_egs_dir/egs.$archive.ark ark:- | nnet3-shuffle-egs --buffer-size=$shuffle_buffer_size --srand=$x ark:- ark:-| nnet3-merge-egs --minibatch-size=$this_num_chunk_per_minibatch --measure-output-frames=false --discard-partial-minibatches=true ark:- ark:- |" \
+              $dir/$[$x+1].$n.raw || touch $dir/.error &
+            echo "doing the n = $n nnet job..."
+            n=$[$n+1]
+          else
+            break
+          fi
+        done
+        wait # num_gpus jobs
       done
-      wait
     )
     # the error message below is not that informative, but $cmd will
     # have printed a more specific one.

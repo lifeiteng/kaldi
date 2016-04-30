@@ -33,7 +33,23 @@ void FeatureTransformEstimate::Estimate(const FeatureTransformEstimateOptions &o
   SpMatrix<double> total_covar, between_covar;
   GetStats(&total_covar, &between_covar, &total_mean, &count);
   KALDI_LOG << "Data count is " << count;
-  EstimateInternal(opts, total_covar, between_covar, total_mean, M, C);
+  if (opts.only_cmvn) {
+    // cmvn here
+    int32 dim = total_covar.NumRows();
+    M->Resize(dim, dim, kSetZero);
+    for (int32 i = 0; i < dim; ++i) {
+      KALDI_ASSERT(total_covar(i, i) > 0);
+      (*M)(i, i) = 1.0 / std::sqrt(total_covar(i, i));
+    }
+    KALDI_LOG << "The Scale Matrix is: " << *M;
+    // M->Power(0.5);
+    // KALDI_LOG << "After Sqrt, M is: " << *M;
+    KALDI_LOG << "Total mean is: " << total_mean;
+    AddMeanOffset(total_mean, M);
+    KALDI_LOG << "The final cmvn 'lda' Matrix is: " << *M;
+  } else {
+    EstimateInternal(opts, total_covar, between_covar, total_mean, M, C);
+  }
 }
 
 // static

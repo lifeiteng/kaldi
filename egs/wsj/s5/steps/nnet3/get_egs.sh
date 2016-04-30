@@ -48,7 +48,7 @@ samples_per_iter=400000 # this is the target number of egs in each archive of eg
 transform_dir=     # If supplied, overrides alidir as the place to find fMLLR transforms
 
 stage=0
-nj=6         # This should be set to the maximum number of jobs you are
+nj=4         # This should be set to the maximum number of jobs you are
              # comfortable to run in parallel; you can increase it if your disk
              # speed is greater and you have more machines.
 online_ivector_dir=  # can be used if we are including speaker information as iVectors.

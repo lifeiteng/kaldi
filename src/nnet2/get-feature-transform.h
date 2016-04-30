@@ -41,8 +41,10 @@ struct FeatureTransformEstimateOptions {
   int32 dim;
   BaseFloat within_class_factor;
   BaseFloat max_singular_value;
+  bool only_cmvn;
   FeatureTransformEstimateOptions(): remove_offset(true), dim(-1),
-                                     within_class_factor(0.001), max_singular_value(5.0) { }
+                                     within_class_factor(0.001), max_singular_value(5.0),
+                                     only_cmvn(false) { }
   
   void Register(OptionsItf *opts) {
     opts->Register("remove-offset", &remove_offset, "If true, output an affine "
@@ -56,6 +58,7 @@ struct FeatureTransformEstimateOptions {
     opts->Register("max-singular-value", &max_singular_value, "If >0, maximum "
                    "allowed singular value of final transform (they are floored "
                    "to this)");
+    opts->Register("only-cmvn", &only_cmvn, "get cmvn 'lda' mat.");
   }    
 };
 

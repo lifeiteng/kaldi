@@ -48,12 +48,15 @@ int main(int argc, char *argv[]) {
     bool allow_partial = false;
     BaseFloat acoustic_scale = 0.1;
     LatticeFasterDecoderConfig config;
+    std::string use_gpu = "yes";
     
     std::string word_syms_filename;
     config.Register(&po);
     po.Register("acoustic-scale", &acoustic_scale, "Scaling factor for acoustic likelihoods");
     po.Register("word-symbol-table", &word_syms_filename, "Symbol table for words [for debug output]");
     po.Register("allow-partial", &allow_partial, "If true, produce output even if end state was not reached.");
+    po.Register("use-gpu", &use_gpu,
+                "yes|no|optional|wait, only has effect if compiled with CUDA");
     
     po.Read(argc, argv);
     
@@ -61,6 +64,10 @@ int main(int argc, char *argv[]) {
       po.PrintUsage();
       exit(1);
     }
+
+#if HAVE_CUDA==1
+    CuDevice::Instantiate().SelectGpuId(use_gpu);
+#endif
 
     std::string model_in_filename = po.GetArg(1),
         fst_in_str = po.GetArg(2),
@@ -175,7 +182,11 @@ int main(int argc, char *argv[]) {
         } else num_fail++;
       }
     }
-      
+
+#if HAVE_CUDA==1
+    CuDevice::Instantiate().PrintProfile();
+#endif
+
     double elapsed = timer.Elapsed();
     KALDI_LOG << "Time taken "<< elapsed
               << "s: real-time factor assuming 100 frames/sec is "

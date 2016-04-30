@@ -65,6 +65,10 @@ int main(int argc, char *argv[]) {
 
     Matrix<BaseFloat> mat;
     TpMatrix<BaseFloat> cholesky;
+    if (opts.only_cmvn) {
+      write_cholesky = "";
+      write_within_covar = "";
+    }
     fte.Estimate(opts, &mat,
                  (write_cholesky != "" || write_within_covar != "" ?
                   &cholesky : NULL));

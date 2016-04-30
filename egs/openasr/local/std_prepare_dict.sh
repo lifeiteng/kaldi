@@ -17,6 +17,8 @@ echo "$0 $@"  # Print the command line for logging
 [ -f path.sh ] && . ./path.sh;
 . parse_options.sh || exit 1;
 
+set -e
+
 if [ $# -ne 1 ]; then
     echo "##### Argument should be the dict file."
     exit 1;
@@ -54,16 +56,14 @@ if $noise;then
     #  echo '[SMACK] SMK'; echo '[UM] UM'; echo '[UH] UHH'
     #  echo '<unk> NSN' ) | \
 
-    (echo '!SIL SIL'; '[breath] BRH'; echo '[noise] NSN'; echo '[cough] CGH';
+    (echo '!SIL SIL'; echo '[breath] BRH'; echo '[noise] NSN'; echo '[cough] CGH';
     echo '[smack] SMK'; echo '[um] UM'; echo '[uh] UHH';
-    echo '<unk> NSN' ) | \
-     cat - $dir/lexicon_words.txt | sort | uniq > $dir/lexicon.txt
+    echo '<unk> NSN' ) | cat - $dir/lexicon_words.txt | sort | uniq > $dir/lexicon.txt
     ( echo SIL; echo BRH; echo CGH; echo NSN ; echo SMK; echo UM; echo UHH ) > $dir/silence_phones.txt
 else
-    (echo '!SIL SIL'; '[breath] SIL'; echo '[noise] SIL'; echo '[cough] SIL';
+    (echo '!SIL SIL'; echo '[breath] SIL'; echo '[noise] SIL'; echo '[cough] SIL';
     echo '[smack] SIL'; echo '[um] SIL'; echo '[uh] SIL';
-    echo '<unk> SIL' ) | \
-     cat - $dir/lexicon_words.txt | sort | uniq > $dir/lexicon.txt
+    echo '<unk> SIL' ) | cat - $dir/lexicon_words.txt | sort | uniq > $dir/lexicon.txt
     (echo SIL;) > $dir/silence_phones.txt
 fi
 
