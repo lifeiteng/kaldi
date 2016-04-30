@@ -36,11 +36,15 @@ void FeatureTransformEstimate::Estimate(const FeatureTransformEstimateOptions &o
   if (opts.only_cmvn) {
     // cmvn here
     int32 dim = total_covar.NumRows();
-    M->Resize(dim, dim);
+    M->Resize(dim, dim, kSetZero);
     M->CopyFromSp(total_covar);
+    for (int32 i = 0; i < dim; ++i) {
+      (*M)(i, i) = total_covar(i, i);
+    }
     KALDI_LOG << "Before Sqrt, M is: " << *M;
     M->Power(0.5);
     KALDI_LOG << "After Sqrt, M is: " << *M;
+    KALDI_LOG << "Total mean is: " << total_mean;
     AddMeanOffset(total_mean, M);
     KALDI_LOG << "The final cmvn 'lda' Matrix is: " << *M;
   } else {
