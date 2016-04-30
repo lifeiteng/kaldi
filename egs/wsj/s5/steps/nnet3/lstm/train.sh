@@ -116,6 +116,7 @@ sudo_password=""
 num_gpus=3
 cv_period=20
 
+glb_cmvn_lda=false
 
 # End configuration section.
 
@@ -293,6 +294,10 @@ context_opts="--left-context=$left_context --right-context=$right_context"
  "$0: Expected num_hidden_layers to be defined" && exit 1;
 
 [ -z "$transform_dir" ] && transform_dir=$alidir
+if $glb_cmvn_lda;then
+  cmvn_opts="--norm-means=false --norm-vars=false"
+  echo "cmvn will be done in lda.mat!!! reset cmvn_opts [$cmvn_opts] -> [$cmvn_opts]"
+fi
 
 if [ $stage -le -4 ] && [ -z "$egs_dir" ]; then
   extra_opts=()
@@ -367,7 +372,7 @@ if [ $stage -le -3 ]; then
   # Appendix C.6 of http://arxiv.org/pdf/1410.7455v6.pdf; it's a scaled variant
   # of an LDA transform but without dimensionality reduction.
   $cmd $dir/log/get_transform.log \
-     nnet-get-feature-transform $lda_opts $dir/lda.mat $dir/lda_stats || exit 1;
+     nnet-get-feature-transform --only-cmvn=$glb_cmvn_lda $lda_opts $dir/lda.mat $dir/lda_stats || exit 1;
 
   ln -sf ../lda.mat $dir/configs/lda.mat
 fi
