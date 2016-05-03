@@ -7,7 +7,7 @@
 
 cmd=run.pl
 stage=-4
-max_wer=8
+max_wer=0
 nj=12
 
 # End configuration.

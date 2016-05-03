@@ -81,19 +81,23 @@ if [ $stage -le 1 ]; then
   echo "$0: decoding $data using utterance-specific decoding graphs using model from $srcdir, output in $dir"
 
   rm $dir/edits.*.txt $dir/aligned_ref.*.txt 2>/dev/null
-
-  $cmd JOB=1:$nj $dir/log/decode.JOB.log \
-    utils/sym2int.pl --map-oov $oov -f 2- $lang/words.txt $sdata/JOB/text \| \
-    steps/cleanup/make_utterance_fsts.pl $dir/top_words.int \| \
-    compile-train-graphs-fsts $scale_opts --read-disambig-syms=$lang/phones/disambig.int \
-     $dir/tree $dir/final.mdl $lang/L_disambig.fst ark:- ark:- \| \
-    nnet-latgen-faster --acoustic-scale=$acoustic_scale --beam=$beam \
+  
+  for n in $(seq $nj);do
+    $cmd JOB=$n:$n $dir/log/decode.JOB.log \
+      utils/sym2int.pl --map-oov $oov -f 2- $lang/words.txt $sdata/JOB/text \| \
+      steps/cleanup/make_utterance_fsts.pl $dir/top_words.int \| \
+      compile-train-graphs-fsts $scale_opts --read-disambig-syms=$lang/phones/disambig.int \
+      $dir/tree $dir/final.mdl $lang/L_disambig.fst ark:- ark:- \| \
+      nnet-latgen-faster --acoustic-scale=$acoustic_scale --beam=$beam \
       --max-active=$max_active --lattice-beam=$lattice_beam \
       --word-symbol-table=$lang/words.txt \
-     $dir/final.mdl ark:- "$feats" ark:- \| \
-    lattice-oracle ark:- "ark:utils/sym2int.pl --map-oov $oov -f 2- $lang/words.txt $sdata/JOB/text|" \
+      $dir/final.mdl ark:- "$feats" ark:- \| \
+      lattice-oracle ark:- "ark:utils/sym2int.pl --map-oov $oov -f 2- $lang/words.txt $sdata/JOB/text|" \
       ark,t:- ark,t:$dir/edits.JOB.txt \| \
-    utils/int2sym.pl -f 2- $lang/words.txt '>' $dir/aligned_ref.JOB.txt || exit 1;
+      utils/int2sym.pl -f 2- $lang/words.txt '>' $dir/aligned_ref.JOB.txt || exit 1 &
+    sleep 2
+  done
+  wait
 fi
 
 
