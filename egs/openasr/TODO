@@ -5,3 +5,8 @@ egs/babel/s5b/local/prepare_kaldi_lm_from_training_text.sh
 egs/ami/s5/local/score.sh                                      |   1 +
 egs/ami/s5/local/score_asclite.sh                              |  30 +++--
 egs/ami/s5/local/sort_bad_utts.py
+
+2016年 5月 1日 星期日 18时31分46秒 CST
+扩展词典/概率词典？ 参考 wsj/s5/run.sh
+
+

@@ -58,12 +58,12 @@ if $noise;then
 
     (echo '!SIL SIL'; echo '[breath] BRH'; echo '[noise] NSN'; echo '[cough] CGH';
     echo '[smack] SMK'; echo '[um] UM'; echo '[uh] UHH';
-    echo '<unk> NSN' ) | cat - $dir/lexicon_words.txt | sort | uniq > $dir/lexicon.txt
+    echo '<UNK> NSN' ) | cat - $dir/lexicon_words.txt | sort | uniq > $dir/lexicon.txt
     ( echo SIL; echo BRH; echo CGH; echo NSN ; echo SMK; echo UM; echo UHH ) > $dir/silence_phones.txt
 else
     (echo '!SIL SIL'; echo '[breath] SIL'; echo '[noise] SIL'; echo '[cough] SIL';
     echo '[smack] SIL'; echo '[um] SIL'; echo '[uh] SIL';
-    echo '<unk> SIL' ) | cat - $dir/lexicon_words.txt | sort | uniq > $dir/lexicon.txt
+    echo '<UNK> SIL' ) | cat - $dir/lexicon_words.txt | sort | uniq > $dir/lexicon.txt
     (echo SIL;) > $dir/silence_phones.txt
 fi
 
