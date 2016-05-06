@@ -306,9 +306,20 @@ if [ $stage -le 6 ];then
      $data/train_all $data/lang exp/tri3 exp/tri3_all_ali
 fi
 
-bash RESULTS test
+# bash RESULTS test
 
 # bash go.sh
+
+if [ $stage -le 8 ];then
+    echo ============================================================================
+    echo "                tri2b : LDA + MLLT Training & Decoding          on"  `date`
+    echo ============================================================================
+
+    # Align tri2 system with train data.
+    steps/align_si.sh --careful true --scale-opts "--transition-scale=1.0 --acoustic-scale=1 --self-loop-scale=0.1" \
+      --beam 16 --retry-beam 20 --nj "$train_nj" --cmd "$train_cmd" \
+      --use-graphs false $data/train_all $data/lang exp/tri2b exp/tri2b_aw1_all_ali
+fi
 
 echo ============================================================================
 echo "Finished successfully on" `date`

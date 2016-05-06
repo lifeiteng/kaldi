@@ -61,6 +61,8 @@ extra_right_context=
 frames_per_chunk=
 decode_iter=
 
+glb_cmvn=false
+
 # End configuration section.
 
 echo "$0 $@"  # Print the command line for logging
@@ -111,7 +113,7 @@ if [ $stage -le 10 ]; then
     cmvn_opts="--norm-means=true --norm-vars=true"
   fi
 
-  local/nnet3/train.sh $ivector_opts \
+  local/nnet3/train.sh $ivector_opts --glb-cmvn $glb_cmvn \
     --num-gpus 3 \
     --cleanup false \
     --stage $train_stage \

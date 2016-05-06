@@ -20,7 +20,7 @@ exit_stage=1000000
 
 speed_perturb=false
 common_egs_dir=
-reporting_email="feiteng@liulishuo.com"
+reporting_email=""
 
 # LSTM options
 splice_indexes="-2,-1,0,1,2 0 0"
@@ -71,6 +71,9 @@ realign_times=""
 
 python_train=false
 suffix=
+glb_cmvn=false
+cv_period=20
+get_egs_stage=0
 
 # End configuration section.
 
@@ -177,7 +180,8 @@ if $python_train;then
       --use-gpu=true \
       --warm-iters=$warm_iters \
       --gpus-wait=true \
-      --gpus="0 1 2" \
+      --gpus="-1 -1 -1" \
+      --cv-period=$cv_period \
       --sudo-password="496666" \
       --feat-dir=$data/train \
       --ali-dir=$ali_dir \
@@ -200,6 +204,7 @@ else
     fi
 
     steps/nnet3/lstm/train.sh $ivector_opts \
+      --glb-cmvn-lda $glb_cmvn --cv-period $cv_period \
       --stage $train_stage \
       --label-delay $label_delay \
       --num-epochs $num_epochs --num-jobs-initial $num_jobs_initial --num-jobs-final $num_jobs_final \
@@ -222,8 +227,7 @@ else
       --chunk-width $chunk_width \
       --chunk-left-context $chunk_left_context \
       --chunk-right-context $chunk_right_context \
-      --egs-dir "$common_egs_dir" \
-      --remove-egs $remove_egs \
+      --egs-dir "$common_egs_dir" --remove-egs $remove_egs --get-egs-stage $get_egs_stage \
       --realign-times "$realign_times" \
       --num-gpus 3 --sudo-password "496666" \
       --exit-stage $exit_stage \
@@ -247,6 +251,7 @@ if [ $stage -le 11 ]; then
   if [ -z $frames_per_chunk ]; then
     frames_per_chunk=$chunk_width
   fi
+  # echo "496666" | sudo -S nvidia-smi -c 0
   echo "496666" | sudo -S nvidia-smi -c 0
   model_opts=
   for decode_set in $decode_sets; do
