@@ -17,6 +17,7 @@ import imp
 import traceback
 import shutil
 import math
+import time
 
 train_lib = imp.load_source('ntl', 'steps/nnet3/nnet3_train_lib.py')
 chain_lib = imp.load_source('ncl', 'steps/nnet3/chain/nnet3_chain_lib.py')
@@ -423,7 +424,8 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
                          cache_io_opts = cur_cache_io_opts,
                          num_chunk_per_minibatch = num_chunk_per_minibatch),
                 wait = False)
-
+            if str(i) == '-1':
+                time.sleep(2.5)
             job += 1
             gpu_processes.append(process_handle)
 
@@ -663,6 +665,10 @@ def Train(args, run_opts):
             logger.info("Exiting early due to --exit-stage {0}".format(iter))
             return
         current_num_jobs = int(0.5 + args.num_jobs_initial + (args.num_jobs_final - args.num_jobs_initial) * float(iter) / num_iters)
+        if iter < args.warm_iters:
+            current_num_jobs = 1
+        elif (current_num_jobs % run_opts.num_gpus != 0):
+            current_num_jobs = current_num_jobs / run_opts.num_gpus * run_opts.num_gpus
 
         if args.stage <= iter:
             if args.shrink_value != 1.0:

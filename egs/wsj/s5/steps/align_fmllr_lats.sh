@@ -16,7 +16,7 @@ scale_opts="--transition-scale=1.0 --self-loop-scale=0.1"
 acoustic_scale=0.1
 beam=10
 retry_beam=40
-final_beam=20  # For the lattice-generation phase there is no retry-beam.  This
+final_beam=15  # For the lattice-generation phase there is no retry-beam.  This
                # is a limitation of gmm-latgen-faster.  We just use an
                # intermediate beam.  We'll lose a little data and it will be
                # slightly slower.  (however, the min-active of 200 that
