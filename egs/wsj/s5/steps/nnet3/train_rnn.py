@@ -412,6 +412,9 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
             archive_index = (k % num_archives) + 1 # work out the 1-based archive index.
 
             cache_write_opt = ""
+            gpu_info = ""
+            if int(i) >= 0:
+                 gpu_info = " --gpu-id=" + str(i)
             if job == 1:
               # an option for writing cache (storing pairs of nnet-computations and
               # computation-requests) during training.
@@ -428,7 +431,7 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
             """.format(command = run_opts.command,
                      train_queue_opt = run_opts.train_queue_opt,
                      dir = dir, iter = iter, next_iter = iter + 1, job = job,
-                     parallel_train_opts = run_opts.parallel_train_opts + " --gpu-id=" + str(i),
+                     parallel_train_opts = run_opts.parallel_train_opts + gpu_info,
                      cache_read_opt = cache_read_opt, cache_write_opt = cache_write_opt,
                      momentum = momentum, max_param_change = max_param_change,
                      min_deriv_time = min_deriv_time,
@@ -437,7 +440,8 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
                      shuffle_buffer_size = shuffle_buffer_size,
                      num_chunk_per_minibatch = num_chunk_per_minibatch),
             wait = False)
-            time.sleep(1)
+            if int(i) <= 0:
+                time.sleep(4.22)
             job += 1
             gpu_processes.append(process_handle)
         if run_opts.gpus_wait:
