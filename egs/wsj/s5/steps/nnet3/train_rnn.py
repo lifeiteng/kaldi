@@ -723,9 +723,11 @@ def Train(args, run_opts):
     if args.stage <= num_iters + 1:
         logger.info("Getting average posterior for purposes of adjusting the priors.")
         try:
-            subprocess.call('echo {password} | sudo -S nvidia-smi -c 0'.format(password=run_opts.password), shell=True)
+            for gpu_id in run_opts.gpus:
+                if int(gpu_id) >= 0:
+                    subprocess.call('echo {password} | sudo -S nvidia-smi -i {gpu_id} -c 0'.format(password=run_opts.password, gpu_id=gpu_id), shell=True)
         except Exception as e:
-            raise Exception("Failed to setting nvidia-smi -c 0")
+            logger.info("Failed to setting nvidia-smi -c 0")
 
         avg_post_vec_file = ComputeAveragePosterior(args.dir, 'combined', egs_dir,
                                 num_archives, args.prior_subset_size, run_opts)

@@ -198,6 +198,20 @@ def GetArgs():
     parser.add_argument("--dir", type=str, required = True,
                         help="Directory to store the models and all other files.")
 
+    parser.add_argument("--warm-iters", type=int, default=0,
+                        help="Run single job at begining")
+    parser.add_argument("--gpus", type=str, action = NullstrToNoneAction,
+                        dest = "gpus",
+                        help="Use GPUs for training, eg. '0 1 2' ", default="-1")
+    parser.add_argument("--sudo-password", type=str, action = NullstrToNoneAction,
+                        dest = "password",
+                        help="Your sudo password", default="")
+    parser.add_argument("--gpus-wait", type=str, action = StrToBoolAction,
+                        choices = ["true", "false"],
+                        help="Wait all gpus jobs finish", default=True)
+    parser.add_argument("--cv-period", type=int, default=10,
+                        help="Run Cv every period iter")
+
     print(' '.join(sys.argv))
 
     args = parser.parse_args()
@@ -249,6 +263,19 @@ def ProcessArgs(args):
         run_opts.realign_use_gpu = False
         run_opts.realign_queue_opt = ""
 
+    if args.use_gpu and args.gpus:
+        run_opts.gpus = args.gpus.split()
+        run_opts.num_gpus = len(run_opts.gpus)
+        run_opts.gpus_wait = args.gpus_wait
+        if not args.password:
+            raise Exception("You must set '--sudo-password' if you use '--gpus'")
+        run_opts.password = args.password
+    else:
+        run_opts.gpus = ['-1']
+        run_opts.num_gpus = 1
+
+    run_opts.cv_period = args.cv_period
+
     if args.realign_command is None:
         run_opts.realign_command = args.command
     else:
@@ -270,6 +297,11 @@ class RunOpts:
         self.prior_queue_opt = None
         self.parallel_train_opts = None
         self.realign_use_gpu = None
+        self.num_gpus = None
+        self.gpus = None
+        self.gpus_wait = None
+        self.password = None
+        self.cv_period = 1
 
 # this is the main method which differs between RNN and DNN training
 def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
@@ -277,7 +309,7 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
                    left_context, right_context,
                    momentum, max_param_change,
                    shuffle_buffer_size, minibatch_size,
-                   run_opts):
+                   cache_read_opt, run_opts):
       # We cannot easily use a single parallel SGE job to do the main training,
       # because the computation of which archive and which --frame option
       # to use for each job is a little complex, so we spawn each one separately.
@@ -286,45 +318,57 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
 
     context_opts="--left-context={0} --right-context={1}".format(
                   left_context, right_context)
+
     processes = []
-    for job in range(1,num_jobs+1):
-        k = num_archives_processed + job - 1 # k is a zero-based index that we will derive
-                                               # the other indexes from.
-        archive_index = (k % num_archives) + 1 # work out the 1-based archive index.
-        frame = (k / num_archives) % frames_per_eg
-        process_handle = RunKaldiCommand("""
+    job = 1
+    while job < num_jobs+1:
+        gpu_processes = []
+        for i in run_opts.gpus: # TODO queue gpu set up
+            if job >= num_jobs + 1:
+                break
+            k = num_archives_processed + job - 1 # k is a zero-based index that we will derive
+                                                   # the other indexes from.
+            archive_index = (k % num_archives) + 1 # work out the 1-based archive index.
+            frame = (k / num_archives) % frames_per_eg
+
+            gpu_info = ""
+            if int(i) >= 0:
+                gpu_info = " --gpu-id=" + str(i)
+
+            cache_write_opt = ""
+            if job == 1:
+                # an option for writing cache (storing pairs of nnet-computations and
+                # computation-requests) during training.
+                cache_write_opt="--write-cache={dir}/cache.{iter} --binary-write-cache=true".format(dir=dir, iter=iter+1)
+
+            process_handle = RunKaldiCommand("""
 {command} {train_queue_opt} {dir}/log/train.{iter}.{job}.log \
   nnet3-train {parallel_train_opts} \
   --print-interval=10 --momentum={momentum} \
   --max-param-change={max_param_change} \
+  {cache_read_opt} {cache_write_opt} \
   "{raw_model}" \
   "ark,bg:nnet3-copy-egs --frame={frame} {context_opts} ark:{egs_dir}/egs.{archive_index}.ark ark:- | nnet3-shuffle-egs --buffer-size={shuffle_buffer_size} --srand={iter} ark:- ark:-| nnet3-merge-egs --minibatch-size={minibatch_size} --measure-output-frames=false --discard-partial-minibatches=true ark:- ark:- |" \
   {dir}/{next_iter}.{job}.raw
           """.format(command = run_opts.command,
                      train_queue_opt = run_opts.train_queue_opt,
                      dir = dir, iter = iter, next_iter = iter + 1, job = job,
-                     parallel_train_opts = run_opts.parallel_train_opts,
-                     frame = frame,
+                     parallel_train_opts = run_opts.parallel_train_opts + gpu_info,
+                     frame = frame, cache_read_opt = cache_read_opt, cache_write_opt = cache_write_opt,
                      momentum = momentum, max_param_change = max_param_change,
                      raw_model = raw_model_string, context_opts = context_opts,
                      egs_dir = egs_dir, archive_index = archive_index,
                      shuffle_buffer_size = shuffle_buffer_size,
-                     minibatch_size = minibatch_size),
-          wait = False)
-
-        processes.append(process_handle)
-
-    all_success = True
-    for process in processes:
-        process.wait()
-        [stdout_value, stderr_value] = process.communicate()
-        print(stderr_value)
-        if process.returncode != 0:
-            all_success = False
-
-    if not all_success:
-        open('{0}/.error'.format(dir), 'w').close()
-        raise Exception("There was error during training iteration {0}".format(iter))
+                     minibatch_size = minibatch_size), wait = False)
+            if int(i) <= 0:
+                time.sleep(2.5)
+            job += 1
+            gpu_processes.append(process_handle)
+        if run_opts.gpus_wait:
+            AllSuccess(dir, iter, gpu_processes)
+        else:
+            processes.extend(gpu_processes)
+    AllSuccess(dir, iter, processes)
 
 def TrainOneIteration(dir, iter, egs_dir,
                       num_jobs, num_archives_processed, num_archives,
@@ -338,12 +382,12 @@ def TrainOneIteration(dir, iter, egs_dir,
 
     # Set off jobs doing some diagnostics, in the background.
     # Use the egs dir from the previous iteration for the diagnostics
-    logger.info("Training neural net (pass {0})".format(iter))
 
-    ComputeTrainCvProbabilities(dir, iter, egs_dir, run_opts)
-
-    if iter > 0:
-        ComputeProgress(dir, iter, egs_dir, run_opts)
+    if iter % run_opts.cv_period == 0:
+        ComputeTrainCvProbabilities(dir, iter, egs_dir, run_opts)
+        if iter > 0:
+            ComputeProgress(dir, iter, egs_dir, run_opts)
+    cache_read_opt = ""
 
     if iter > 0 and (iter <= (num_hidden_layers-1) * add_layers_period) and (iter % add_layers_period == 0):
 
@@ -356,6 +400,8 @@ def TrainOneIteration(dir, iter, egs_dir,
         do_average = True
         if iter == 0:
             do_average = False   # on iteration 0, pick the best, don't average.
+        else:
+            cache_read_opt = "--read-cache={dir}/cache.{iter}".format(dir=dir, iter=iter)
         raw_model_string = "nnet3-am-copy --raw=true --learning-rate={0} {1}/{2}.mdl - |".format(learning_rate, dir, iter)
 
     if do_average:
@@ -380,7 +426,7 @@ def TrainOneIteration(dir, iter, egs_dir,
                    left_context, right_context,
                    momentum, max_param_change,
                    shuffle_buffer_size, cur_minibatch_size,
-                   run_opts)
+                   cache_read_opt, run_opts)
     [models_to_average, best_model] = GetSuccessfulModels(num_jobs, '{0}/log/train.{1}.%.log'.format(dir,iter))
     nnets_list = []
     for n in models_to_average:
@@ -419,6 +465,8 @@ nnet3-am-copy --set-raw-nnet=- {dir}/{iter}.mdl {dir}/{new_iter}.mdl
         raise Exception("Could not find {0}, at the end of iteration {1}".format(new_model, iter))
     elif os.stat(new_model).st_size == 0:
         raise Exception("{0} has size 0. Something went wrong in iteration {1}".format(new_model, iter))
+    if os.path.exists("{0}/cache.{1}".format(dir, iter)):
+        os.remove("{0}/cache.{1}".format(dir, iter))
 
 # args is a Namespace with the required parameters
 def Train(args, run_opts):
@@ -534,13 +582,17 @@ def Train(args, run_opts):
         print(realign_iters)
     # egs_dir will be updated if there is realignment
     cur_egs_dir=egs_dir
-
+    logger.info("Will keep model from iter {0}".format(num_iters - num_iters_combine + 1))
     logger.info("Training will run for {0} epochs = {1} iterations".format(args.num_epochs, num_iters))
     for iter in range(num_iters):
         if (args.exit_stage is not None) and (iter == args.exit_stage):
             logger.info("Exiting early due to --exit-stage {0}".format(iter))
             return
         current_num_jobs = int(0.5 + args.num_jobs_initial + (args.num_jobs_final - args.num_jobs_initial) * float(iter) / num_iters)
+        if iter < args.warm_iters:
+            current_num_jobs = 1
+        elif (current_num_jobs % run_opts.num_gpus != 0):
+            current_num_jobs = current_num_jobs / run_opts.num_gpus * run_opts.num_gpus
 
         if args.stage <= iter:
             if iter in realign_iters:
@@ -557,6 +609,7 @@ def Train(args, run_opts):
             model_file = "{dir}/{iter}.mdl".format(dir = args.dir, iter = iter)
 
             logger.info("On iteration {0}, learning rate is {1}.".format(iter, learning_rate(iter, current_num_jobs, num_archives_processed)))
+            logger.info("Training neural net (pass {0} / {1})".format(iter, num_iters))
 
             TrainOneIteration(args.dir, iter, egs_dir, current_num_jobs,
                               num_archives_processed, num_archives,
@@ -588,6 +641,13 @@ def Train(args, run_opts):
 
     if args.stage <= num_iters + 1:
         logger.info("Getting average posterior for purposes of adjusting the priors.")
+        try:
+            for gpu_id in run_opts.gpus:
+                if int(gpu_id) >= 0:
+                    subprocess.call('echo {password} | sudo -S nvidia-smi -i {gpu_id} -c 0'.format(password=run_opts.password, gpu_id=gpu_id), shell=True)
+        except Exception as e:
+            logger.info("Failed to setting nvidia-smi -c 0")
+
         avg_post_vec_file = ComputeAveragePosterior(args.dir, 'combined', egs_dir,
                                 num_archives, args.prior_subset_size, run_opts)
 
