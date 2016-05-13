@@ -244,9 +244,9 @@ void CuDevice::SelectGpuId(int32 gpu_id) {
       KALDI_LOG << "cudaSetDevice(" << gpu_id << "): "
                 << name << "\t" << mem_stats;
       // Destroy the CUDA context for the thread
-#if (CUDA_VERSION < 75)
+// #if (CUDA_VERSION < 75)
       cudaThreadExit(); //deprecated, but for legacy reason not cudaDeviceReset
-#endif
+// #endif
     } break;
 
 #if (CUDA_VERSION > 32)

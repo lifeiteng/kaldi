@@ -160,7 +160,7 @@ if [ $stage -le 1 ]; then
        --lattice-beam=$lattice_beam --acoustic-scale=$acwt --allow-partial=true \
        --word-symbol-table=$graphdir/words.txt "$model" \
        $graphdir/HCLG.fst "$feats" "$lat_wspecifier" || exit 1 &
-    sleep 2
+    sleep 5
   done
   wait
 fi
