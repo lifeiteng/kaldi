@@ -136,9 +136,12 @@ int main(int argc, char *argv[]) {
         output.ApplyExp();
       matrix_writer.Write(example_reader.Key(), output);
     }
+
 #if HAVE_CUDA==1
-    CuDevice::Instantiate().PrintProfile();
+      CuDevice::Instantiate().PrintProfile();
+      CuDevice::Instantiate().DeviceReset();
 #endif
+
     KALDI_LOG << "Processed " << num_egs << " examples.";
     return 0;
   } catch(const std::exception &e) {

@@ -86,13 +86,16 @@ int main(int argc, char *argv[]) {
 
     bool ok = trainer.PrintTotalStats();
 
-#if HAVE_CUDA==1
-    CuDevice::Instantiate().PrintProfile();
-#endif
     Output ko(model_wxfilename, binary_write);
     nnet.Write(ko.Stream(), binary_write);
     
     KALDI_LOG << "Wrote raw nnet model to " << model_wxfilename;
+
+#if HAVE_CUDA==1
+      CuDevice::Instantiate().PrintProfile();
+      CuDevice::Instantiate().DeviceReset();
+#endif
+
     return (ok ? 0 : 1);
   } catch(const std::exception &e) {
     std::cerr << e.what() << '\n';

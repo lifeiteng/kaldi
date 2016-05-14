@@ -93,12 +93,14 @@ int main(int argc, char *argv[]) {
       ok = trainer.PrintTotalStats();
     }
 
-#if HAVE_CUDA==1
-    CuDevice::Instantiate().PrintProfile();
-#endif
-
     WriteKaldiObject(nnet, nnet_wxfilename, binary_write);
     KALDI_LOG << "Wrote raw model to " << nnet_wxfilename;
+
+#if HAVE_CUDA==1
+    CuDevice::Instantiate().PrintProfile();
+    CuDevice::Instantiate().DeviceReset();
+#endif
+
     return (ok ? 0 : 1);
   } catch(const std::exception &e) {
     std::cerr << e.what() << '\n';

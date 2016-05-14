@@ -95,11 +95,6 @@ int main(int argc, char *argv[]) {
 
       combiner.Combine();
 
-
-#if HAVE_CUDA==1
-      CuDevice::Instantiate().PrintProfile();
-#endif
-
       WriteKaldiObject(combiner.GetNnet(), nnet_wxfilename, binary_write);
     } else {
       KALDI_LOG << "Copying the single input model directly to the output, "
@@ -108,6 +103,13 @@ int main(int argc, char *argv[]) {
     } 
     KALDI_LOG << "Finished combining neural nets, wrote model to "
               << nnet_wxfilename;
+
+#if HAVE_CUDA==1
+    CuDevice::Instantiate().PrintProfile();
+    CuDevice::Instantiate().DeviceReset();
+#endif
+
+    return 0;
   } catch(const std::exception &e) {
     std::cerr << e.what() << '\n';
     return -1;

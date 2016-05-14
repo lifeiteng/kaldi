@@ -145,7 +145,8 @@ int main(int argc, char *argv[]) {
                 << PrintVectorPerUpdatableComponent(nnet1, dot_prod);
     }
 #if HAVE_CUDA==1
-    CuDevice::Instantiate().PrintProfile();
+      CuDevice::Instantiate().PrintProfile();
+      CuDevice::Instantiate().DeviceReset();
 #endif
     return 0;
   } catch(const std::exception &e) {
