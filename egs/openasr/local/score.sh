@@ -2,8 +2,6 @@
 # Copyright 2012-2014  Johns Hopkins University (Author: Daniel Povey, Yenda Trmal)
 # Apache 2.0
 
-[ -f ./path.sh ] && . ./path.sh
-
 # begin configuration section.
 cmd=run.pl
 stage=0
@@ -11,10 +9,13 @@ decode_mbr=false
 reverse=false
 stats=true
 beam=6
-word_ins_penalty=0.0,0.5,1.0
+word_ins_penalty=0.0
 min_lmwt=9
 max_lmwt=20
 iter=final
+ground_truth='hyp' # ref 根据equal_pattern选择文本
+ref_text=""
+
 #end configuration section.
 
 echo "$0 $@"  # Print the command line for logging
@@ -45,10 +46,10 @@ done
 
 
 ref_filtering_cmd="cat"
-[ -x local/wer_output_filter ] && ref_filtering_cmd="local/wer_output_filter"
+# [ -x local/wer_output_filter ] && ref_filtering_cmd="local/wer_output_filter"
 [ -x local/wer_ref_filter ] && ref_filtering_cmd="local/wer_ref_filter"
 hyp_filtering_cmd="cat"
-[ -x local/wer_output_filter ] && hyp_filtering_cmd="local/wer_output_filter"
+# [ -x local/wer_output_filter ] && hyp_filtering_cmd="local/wer_output_filter"
 [ -x local/wer_hyp_filter ] && hyp_filtering_cmd="local/wer_hyp_filter"
 
 
@@ -60,12 +61,15 @@ fi
 
 
 mkdir -p $dir/scoring
-cat $data/text | $ref_filtering_cmd > $dir/scoring/test_filt.txt || exit 1;
+if [ ! -z $ref_text ] && [ -f $ref_text ];then
+  cat $ref_text | $ref_filtering_cmd > $dir/scoring/test_filt.txt || exit 1;
+else
+  cat $data/text | $ref_filtering_cmd > $dir/scoring/test_filt.txt || exit 1;
+fi
 
 if [ $stage -le 0 ]; then
   for wip in $(echo $word_ins_penalty | sed 's/,/ /g'); do
     mkdir -p $dir/scoring/penalty_$wip/log
-
     if $decode_mbr ; then
       $cmd LMWT=$min_lmwt:$max_lmwt $dir/scoring/penalty_$wip/log/best_path.LMWT.log \
         acwt=\`perl -e \"print 1.0/LMWT\"\`\; \
@@ -74,24 +78,29 @@ if [ $stage -le 0 ]; then
         lattice-prune --beam=$beam ark:- ark:- \| \
         lattice-mbr-decode  --word-symbol-table=$symtab \
         ark:- ark,t:- \| \
-        utils/int2sym.pl -f 2- $symtab \| \
-        $hyp_filtering_cmd '>' $dir/scoring/penalty_$wip/LMWT.txt || exit 1;
+        utils/int2sym.pl -f 2- $symtab '>' $dir/scoring/penalty_$wip/LMWT.txt.best || exit 1;
     else
       $cmd LMWT=$min_lmwt:$max_lmwt $dir/scoring/penalty_$wip/log/best_path.LMWT.log \
         lattice-scale --inv-acoustic-scale=LMWT "ark:gunzip -c $dir/lat.*.gz|" ark:- \| \
         lattice-add-penalty --word-ins-penalty=$wip ark:- ark:- \| \
         lattice-best-path --word-symbol-table=$symtab ark:- ark,t:- \| \
-        utils/int2sym.pl -f 2- $symtab \| \
-        $hyp_filtering_cmd '>' $dir/scoring/penalty_$wip/LMWT.txt || exit 1;
+        utils/int2sym.pl -f 2- $symtab '>' $dir/scoring/penalty_$wip/LMWT.txt.best || exit 1;
     fi
+  done
+fi
 
-    if $reverse; then # rarely-used option, ignore this.
-      for lmwt in `seq $min_lmwt $max_lmwt`; do
-        mv $dir/scoring/penalty_$wip/$lmwt.txt $dir/scoring/penalty_$wip/$lmwt.txt.orig
+if [ $stage -le 1 ]; then
+  for wip in $(echo $word_ins_penalty | sed 's/,/ /g'); do
+    for lmwt in `seq $min_lmwt $max_lmwt`; do
+      cat $dir/scoring/penalty_$wip/$lmwt.txt.best | $hyp_filtering_cmd >$dir/scoring/penalty_$wip/$lmwt.txt.orig || exit 1;
+      
+      if $reverse; then # rarely-used option, ignore this.
         awk '{ printf("%s ",$1); for(i=NF; i>1; i--){ printf("%s ",$i); } printf("\n"); }' \
           <$dir/scoring/penalty_$wip/$lmwt.txt.orig >$dir/scoring/penalty_$wip/$lmwt.txt
-      done
-    fi
+      else
+        mv $dir/scoring/penalty_$wip/$lmwt.txt.orig $dir/scoring/penalty_$wip/$lmwt.txt || exit 1;
+      fi
+    done
 
     $cmd LMWT=$min_lmwt:$max_lmwt $dir/scoring/penalty_$wip/log/score.LMWT.log \
       cat $dir/scoring/penalty_$wip/LMWT.txt \| \
@@ -101,7 +110,7 @@ if [ $stage -le 0 ]; then
 fi
 
 
-if [ $stage -le 1 ]; then
+if [ $stage -le 2 ]; then
 
   for wip in $(echo $word_ins_penalty | sed 's/,/ /g'); do
     for lmwt in $(seq $min_lmwt $max_lmwt); do
@@ -134,6 +143,47 @@ if [ $stage -le 1 ]; then
       cat $dir/scoring/wer_details/per_utt \| \
       utils/scoring/wer_ops_details.pl --special-symbol "'***'" \| \
       sort -b -i -k 1,1 -k 4,4rn -k 2,2 -k 3,3 \> $dir/scoring/wer_details/ops || exit 1;
+
+    (
+      # local/wer_ops_details.py $dir/scoring/wer_details/per_utt \
+      #   $dir/scoring/wer_details/per_utt.ana || exit 1;
+      export LC_ALL=C
+      cat $dir/scoring/penalty_$best_wip/$best_lmwt.txt | \
+            align-text --special-symbol="***" ark:$dir/scoring/test_filt.txt ark:- ark,t:$dir/scoring/wer_details/per_utt.all 2>/dev/null
+      awk '{printf $1" ref "; for(i=2;i<NF;i+=3) printf $i" "; print "";}' $dir/scoring/wer_details/per_utt.all \
+        >$dir/scoring/wer_details/per_utt.ref.t || exit 1;
+      awk '{printf $1" hyp "; for(i=3;i<=NF;i+=3) printf $i" "; print "";}' $dir/scoring/wer_details/per_utt.all \
+        >$dir/scoring/wer_details/per_utt.hyp.t || exit 1;
+      awk 'FNR==NR{C[$1]=$0;} FNR<NR{if ($1 in C) {print C[$1]; print $0;}}' $dir/scoring/wer_details/per_utt.ref.t \
+        $dir/scoring/wer_details/per_utt.hyp.t >$dir/scoring/wer_details/per_utt.ref_hyp.t || exit 1;
+
+      # wc -l $dir/scoring/wer_details/per_utt.ref_hyp.t
+
+      local/wer/wer_ops_details.py --ground-truth $ground_truth --equal-pattern local/wer/equal_pattern.txt $dir/scoring/wer_details/per_utt.ref_hyp.t \
+        $dir/scoring/wer_details/per_utt.ana $dir/scoring/wer_details/per_utt.ref_hyp || exit 1;
+
+      cat $dir/scoring/wer_details/per_utt.ref_hyp | \
+        awk '{if($2 == "ref") {$2=""; print $0;}}' | sort >$dir/scoring/wer_details/correct_ref.txt || exit 1;
+      cat $dir/scoring/wer_details/per_utt.ref_hyp | \
+        awk '{if($2 == "hyp") {$2=""; print $0;}}' | sort >$dir/scoring/wer_details/correct_hyp.txt || exit 1;
+
+      compute-wer --text --mode=present ark:$dir/scoring/wer_details/correct_ref.txt \
+        ark,p:$dir/scoring/wer_details/correct_hyp.txt >$dir/wer_correct  2>/dev/null|| exit 1;
+
+      cat $dir/scoring/wer_details/per_utt | grep "0 0 0" | awk '{print $1;}' | sort | uniq > $dir/scoring/wer_details/tmp.allright
+      awk 'FNR==NR{C[$1]=1;} FNR<NR{if(!($1 in C)) { if($2 != "op") print $0;}}' $dir/scoring/wer_details/tmp.allright \
+        $dir/scoring/wer_details/per_utt | grep -v "#csid" | sort -V >$dir/scoring/wer_details/per_utt.clean
+
+      echo "----------------------------------"
+      echo "Before correct WER"
+      cat $dir/wer_${best_lmwt}_${best_wip}
+      echo "After correct WER"
+      cat $dir/wer_correct
+      echo "----------------------------------"
+      rm -f $dir/scoring/wer_details/*.t
+      rm -f $dir/scoring/wer_details/per_utt.all
+      rm -f $dir/scoring/wer_details/tmp.allright
+    )
 
     $cmd $dir/scoring/log/wer_bootci.log \
       compute-wer-bootci \
