@@ -164,6 +164,11 @@ int main(int argc, char *argv[]) {
     KALDI_LOG << "Done " << num_success << " utterances, failed for "
               << num_fail;
 
+#if HAVE_CUDA==1
+      CuDevice::Instantiate().PrintProfile();
+      CuDevice::Instantiate().DeviceReset();
+#endif
+
     if (num_success != 0) return 0;
     else return 1;
   } catch(const std::exception &e) {

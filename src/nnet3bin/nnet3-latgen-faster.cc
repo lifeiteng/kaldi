@@ -252,10 +252,6 @@ int main(int argc, char *argv[]) {
       }
     }
 
-#if HAVE_CUDA==1
-    CuDevice::Instantiate().PrintProfile();
-#endif
-
     double elapsed = timer.Elapsed();
     KALDI_LOG << "Time taken "<< elapsed
               << "s: real-time factor assuming 100 frames/sec is "
@@ -266,6 +262,12 @@ int main(int argc, char *argv[]) {
               << frame_count<<" frames.";
 
     delete word_syms;
+
+#if HAVE_CUDA==1
+    CuDevice::Instantiate().PrintProfile();
+    CuDevice::Instantiate().DeviceReset();
+#endif
+
     if (num_success != 0) return 0;
     else return 1;
   } catch(const std::exception &e) {

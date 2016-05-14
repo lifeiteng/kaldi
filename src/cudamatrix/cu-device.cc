@@ -658,6 +658,12 @@ void CuDevice::CheckGpuHealth() {
 CuDevice::CuDevice(): active_gpu_id_(-1), verbose_(true),
                       allocator_(CuAllocatorOptions()) { }
 
+void CuDevice::DeviceReset() {
+  if (Enabled()) {
+    cudaSetDevice(active_gpu_id_);
+    cudaDeviceReset();
+  }
+}
 
 CuDevice::~CuDevice() {
   if (Enabled()) {

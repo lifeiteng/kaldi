@@ -197,6 +197,7 @@ int main(int argc, char *argv[]) {
 
 #if HAVE_CUDA==1
     CuDevice::Instantiate().PrintProfile();
+    CuDevice::Instantiate().DeviceReset();
 #endif
     return (num_done != 0 ? 0 : 1);
   } catch(const std::exception &e) {
