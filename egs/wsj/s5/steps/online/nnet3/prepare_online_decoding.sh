@@ -83,7 +83,7 @@ dir=$(readlink -f $dir) # Convert $dir to an absolute pathname, so that the
 mkdir -p $dir/conf
 
 
-cp $srcdir/${iter}.mdl $dir/final.mdl || exit 1;
+cp $srcdir/${iter}.mdl $dir/ || exit 1;
 cp $srcdir/tree $dir/ || exit 1;
 if [ -f $srcdir/frame_subsampling_factor ]; then
 	cp $srcdir/frame_subsampling_factor $dir/

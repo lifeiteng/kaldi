@@ -74,6 +74,8 @@ suffix=
 glb_cmvn=false
 cv_period=20
 get_egs_stage=0
+gpus="0 1 2"
+use_gpu=true
 
 # End configuration section.
 
@@ -83,13 +85,13 @@ echo "$0 $@"  # Print the command line for logging
 . ./path.sh
 . ./utils/parse_options.sh
 
-if ! cuda-compiled; then
-  cat <<EOF && exit 1
-This script is intended to be used with GPUs but you have not compiled Kaldi with CUDA
-If you want to use GPUs (and have them), go to src/, and configure and make on a machine
-where "nvcc" is installed.
-EOF
-fi
+# if ! cuda-compiled; then
+#   cat <<EOF && exit 1
+# This script is intended to be used with GPUs but you have not compiled Kaldi with CUDA
+# If you want to use GPUs (and have them), go to src/, and configure and make on a machine
+# where "nvcc" is installed.
+# EOF
+# fi
 
 
 if [ "$speed_perturb" == "true" ]; then
@@ -177,10 +179,10 @@ if $python_train;then
       --egs.dir="$common_egs_dir" \
       --cleanup.remove-egs=$remove_egs \
       --cleanup.preserve-model-interval=100 \
-      --use-gpu=true \
+      --use-gpu=$use_gpu \
       --warm-iters=$warm_iters \
       --gpus-wait=true \
-      --gpus="-1 -1 -1" \
+      --gpus="$gpus" \
       --cv-period=$cv_period \
       --sudo-password="496666" \
       --feat-dir=$data/train \

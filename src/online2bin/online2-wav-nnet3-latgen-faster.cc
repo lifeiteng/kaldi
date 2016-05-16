@@ -106,7 +106,9 @@ int main(int argc, char *argv[]) {
     BaseFloat chunk_length_secs = 0.18;
     bool do_endpointing = false;
     bool online = true;
-    
+    std::string use_gpu = "yes";
+    int32 gpu_id = -1;
+
     po.Register("chunk-length", &chunk_length_secs,
                 "Length of chunk size in seconds, that we process.  Set to <= 0 "
                 "to use all input in one chunk.");
@@ -125,7 +127,10 @@ int main(int argc, char *argv[]) {
                 "--chunk-length=-1.");
     po.Register("num-threads-startup", &g_num_threads,
                 "Number of threads used when initializing iVector extractor.");
-    
+    po.Register("use-gpu", &use_gpu,
+                "yes|no|optional|wait, only has effect if compiled with CUDA");
+    po.Register("gpu-id", &gpu_id, "<0 use CPU, 0<= gpu_id <= num_gpus-1 use GPU[gpu_id].");
+   
     feature_config.Register(&po);
     nnet3_decoding_config.Register(&po);
     endpoint_config.Register(&po);
@@ -136,7 +141,16 @@ int main(int argc, char *argv[]) {
       po.PrintUsage();
       return 1;
     }
-    
+
+#if HAVE_CUDA==1
+    if (use_gpu == "no" || gpu_id < 0) {
+      CuDevice::Instantiate().SelectGpuId(use_gpu);
+    }
+    else if (gpu_id >= 0) {
+      CuDevice::Instantiate().SelectGpuId(gpu_id);
+    }
+#endif
+
     std::string nnet3_rxfilename = po.GetArg(1),
         fst_rxfilename = po.GetArg(2),
         spk2utt_rspecifier = po.GetArg(3),
@@ -281,6 +295,12 @@ int main(int argc, char *argv[]) {
               << " per frame over " << num_frames << " frames.";
     delete decode_fst;
     delete word_syms; // will delete if non-NULL.
+
+#if HAVE_CUDA==1
+    CuDevice::Instantiate().PrintProfile();
+    CuDevice::Instantiate().DeviceReset();
+#endif
+
     return (num_done != 0 ? 0 : 1);
   } catch(const std::exception& e) {
     std::cerr << e.what();
