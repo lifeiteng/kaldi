@@ -27,7 +27,7 @@ numGaussSAT=90000
 feats_nj=6
 train_nj=6
 decode_nj=2
-nj=12
+nj=6
 
 data=data
 
@@ -35,7 +35,7 @@ if [ $stage -le -2 ];then
     echo ============================================================================
     echo "                Data & Lexicon & Language Preparation                     "
     echo ============================================================================
-    echo "======== 处理数据集 voxpop TED openasr-data-01 ========"
+    # echo "======== 处理数据集 voxpop TED openasr-data-01 ========"
     # local/std_prepare_data.sh --train true --test true --corpus "voxpop" --data data/voxpop /data/voxpop
     # (
     #     ted=/home/feiteng/kaldi-trunk/egs/tedlium/s5/data
@@ -160,7 +160,7 @@ if [ $stage -le -2 ];then
     #     done
     # done
 
-    echo "========  combine data ========"
+    # echo "========  combine data ========"
     # for x in "mfcc" "fbank";do
     #     rm -rf data_$x/train
     #     rm -f data_$x/lang
@@ -194,7 +194,43 @@ if [ $stage -le -2 ];then
     # done
 
     # local/std_format_data.sh --data data --lm-suffix "translm_tg" data/local/lm/trans_lm_3.arpa || exit 1;
-    local/std_format_data.sh --data data --lm-suffix "biglm_tg" /data/LM/interp_lm.prune-8 || exit 1 &
+    # local/std_format_data.sh --data data --lm-suffix "biglm_tg" /data/LM/interp_lm.prune-8 || exit 1 &
+    
+    echo "========  compute feature ========"
+    data=data_fbank_hires
+    mkdir -p $data
+    # # for x in forum native non-native train;do
+    # for x in voxpop tedlium openasr-01;do
+    #     rm -rf $data/$x
+    #     cp -r data_fbank/$x $data
+    #     echo ============================================================================
+    #     echo "        Fbank Feature Extration & CMVN for Training and Test set on"  `date`
+    #     echo ============================================================================
+    #     featdir=fbank80
+    #     steps/make_fbank.sh --compress false --fbank-config conf/fbank_hires.conf --nj $nj --cmd "run.pl" \
+    #         $data/$x/train exp/make_feat_fbank80_${x}_train /ssd/$data/$x/train/$featdir || exit 1;
+    #     steps/compute_cmvn_stats.sh $data/$x/train exp/make_feat_fbank80_${x}_train /ssd/$data/$x/train/$featdir || exit 1;
+    # done
+    # rm -rf $data/train
+    # utils/data/combine_data.sh --skip-fix true $data/train $data/voxpop/train $data/tedlium/train \
+    #     $data/openasr-01/train || exit 1;
+    set -e
+    for x in forum native non-native;do
+        rm -rf $data/$x
+        cp -rL data_fbank/$x $data
+        echo ============================================================================
+        echo "        Fbank Feature Extration & CMVN for Training and Test set on"  `date`
+        echo ============================================================================
+        featdir=fbank80
+        steps/make_fbank.sh --compress false --fbank-config conf/fbank_hires.conf --nj $nj --cmd "run.pl" \
+            $data/$x exp/make_feat_fbank80_${x} /ssd/$data/$x/$featdir || exit 1;
+        steps/compute_cmvn_stats.sh $data/$x exp/make_feat_fbank80_${x} /ssd/$data/$x/$featdir || exit 1;
+    done
+
+    cd $data
+    ln -sf ../data/lang
+    ln -sf ../data/lang_biglm_tg
+    exit 1;
 fi
 
 data=data_mfcc

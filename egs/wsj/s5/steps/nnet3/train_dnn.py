@@ -114,7 +114,7 @@ def GetArgs():
                         default=None, action=NullstrToNoneAction,
                         help="""Command to be used with steps/nnet3/align.sh during realignment""")
     parser.add_argument("--trainer.realign.num-jobs", type=int, dest='realign_num_jobs',
-                        default=30,
+                        default=12,
                         help="Number of jobs to use for realignment")
     parser.add_argument("--trainer.realign.times", type=str, dest='realign_times',
                         default=None, action=NullstrToNoneAction,
