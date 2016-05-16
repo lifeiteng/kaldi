@@ -119,6 +119,8 @@ def GetArgs():
                         choices=['true', 'false'], default = True)
     parser.add_argument("config_dir",
                         help="Directory to write config files and variables")
+    parser.add_argument("--bottleneck-dim", type=int,
+                        help="bottleneck dim", default = 0)
 
     print(' '.join(sys.argv))
 
@@ -164,12 +166,18 @@ def CheckArgs(args):
                             "--pnorm-input-dim or --pnorm-output-dim options");
         args.nonlin_input_dim = args.relu_dim
         args.nonlin_output_dim = args.relu_dim
+        args.final_nonlin_output_dim = args.relu_dim
     else:
         if not args.pnorm_input_dim > 0 or not args.pnorm_output_dim > 0:
             raise Exception("--relu-dim not set, so expected --pnorm-input-dim and "
                             "--pnorm-output-dim to be provided.");
         args.nonlin_input_dim = args.pnorm_input_dim
         args.nonlin_output_dim = args.pnorm_output_dim
+        args.final_nonlin_output_dim = args.pnorm_output_dim
+
+    if args.bottleneck_dim != 0:
+        assert(args.bottleneck_dim > 0)
+        args.final_nonlin_output_dim = args.bottleneck_dim
 
     if args.add_final_sigmoid and args.include_log_softmax:
         raise Exception("--include-log-softmax and --add-final-sigmoid cannot both be true.")
@@ -402,7 +410,8 @@ def ParseSpliceString(splice_indexes):
 def MakeConfigs(config_dir, splice_indexes_string,
                 cnn_layer, cnn_bottleneck_dim, cepstral_lifter,
                 feat_dim, ivector_dim, num_targets, add_lda,
-                nonlin_input_dim, nonlin_output_dim, subset_dim,
+                nonlin_input_dim, nonlin_output_dim,
+                final_nonlin_output_dim, subset_dim,
                 pool_type, pool_window, pool_lpfilter_width,
                 use_presoftmax_prior_scale,
                 final_layer_normalize_target,
@@ -531,7 +540,7 @@ def MakeConfigs(config_dir, splice_indexes_string,
                 raise Exception("xent-separate-forward-affine=True is valid only if xent-regularize is non-zero")
 
             prev_layer_output_chain = nodes.AddAffRelNormLayer(config_lines, "Tdnn_pre_final_chain",
-                                                    prev_layer_output, nonlin_output_dim,
+                                                    prev_layer_output, final_nonlin_output_dim,
                                                     self_repair_scale = self_repair_scale,
                                                     norm_target_rms = final_layer_normalize_target)
 
@@ -543,7 +552,7 @@ def MakeConfigs(config_dir, splice_indexes_string,
 
 
             prev_layer_output_xent = nodes.AddAffRelNormLayer(config_lines, "Tdnn_pre_final_xent",
-                                                    prev_layer_output, nonlin_output_dim,
+                                                    prev_layer_output, final_nonlin_output_dim,
                                                     self_repair_scale = self_repair_scale,
                                                     norm_target_rms = final_layer_normalize_target)
 
@@ -555,8 +564,11 @@ def MakeConfigs(config_dir, splice_indexes_string,
                                 include_log_softmax = True,
                                 name_affix = 'xent')
         else:
+            local_nonlin_output_dim = nonlin_output_dim
+            if i == num_hidden_layers - 1:
+                local_nonlin_output_dim = final_nonlin_output_dim
             prev_layer_output = nodes.AddAffRelNormLayer(config_lines, "Tdnn_{0}".format(i),
-                                                        prev_layer_output, nonlin_output_dim,
+                                                        prev_layer_output, local_nonlin_output_dim,
                                                         self_repair_scale = self_repair_scale,
                                                         norm_target_rms = 1.0 if i < num_hidden_layers -1 else final_layer_normalize_target)
 
@@ -619,6 +631,7 @@ def Main():
                 cepstral_lifter = args.cepstral_lifter,
                 nonlin_input_dim = args.nonlin_input_dim,
                 nonlin_output_dim = args.nonlin_output_dim,
+                final_nonlin_output_dim = args.final_nonlin_output_dim,
                 subset_dim = args.subset_dim,
                 pool_type = args.pool_type, pool_window = args.pool_window,
                 pool_lpfilter_width = args.pool_lpfilter_width,

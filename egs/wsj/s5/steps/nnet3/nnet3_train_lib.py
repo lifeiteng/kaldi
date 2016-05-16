@@ -457,7 +457,7 @@ steps/nnet3/align.sh --nj {num_jobs_align} --cmd "{align_cmd} {align_queue_opt}"
 def Realign(dir, iter, feat_dir, lang, prev_egs_dir, cur_egs_dir,
             prior_subset_size, num_archives, run_opts,
             transform_dir = None, online_ivector_dir = None):
-    raise Exception("Realignment stage has not been implemented in nnet3")
+    # raise Exception("Realignment stage has not been implemented in nnet3")
     logger.info("Getting average posterior for purposes of adjusting the priors.")
     # Note: this just uses CPUs, using a smallish subset of data.
     # always use the first egs archive, which makes the script simpler;
