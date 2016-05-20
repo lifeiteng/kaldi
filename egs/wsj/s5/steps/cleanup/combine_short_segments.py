@@ -262,7 +262,10 @@ def CombineSegments(input_dir, output_dir, minimum_duration):
                 if not cur_utt_dur >= minimum_duration:
                     # this is a rare occurrence, better make the user aware of this
                     # situation and let them deal with it
-                    raise Exception('Speaker {0} does not have enough utterances to satisfy the minimum duration constraint'.format(speaker))
+                    error_info = 'Speaker {0} does not have enough utterances to satisfy the minimum duration constraint'.format(speaker)
+                    print(error_info)
+                    break
+                    # raise Exception(error_info)
 
                 combined_duration = 0
                 combined_utts = []
