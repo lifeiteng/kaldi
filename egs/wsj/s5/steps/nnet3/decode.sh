@@ -33,6 +33,9 @@ extra_right_context_final=-1
 feat_type=
 online_ivector_dir=
 minimize=false
+frame_subsampling_opt=
+online_cmvn=false
+
 # End configuration section.
 
 echo "$0 $@"  # Print the command line for logging
@@ -91,9 +94,15 @@ fi
 
 splice_opts=`cat $srcdir/splice_opts 2>/dev/null`
 
+cmvn_cmd="apply-cmvn $cmvn_opts --utt2spk=ark:$sdata/JOB/utt2spk scp:$sdata/JOB/cmvn.scp"
+if $online_cmvn;then
+  cmvn_opts=`echo $cmvn_opts | sed 's/means/mean/g'`
+  cmvn_cmd="apply-cmvn-online $cmvn_opts --spk2utt=ark:$sdata/JOB/spk2utt 'matrix-sum scp:$data/cmvn.scp -|'"
+fi
+
 case $feat_type in
-  raw) feats="ark,s,cs:apply-cmvn $cmvn_opts --utt2spk=ark:$sdata/JOB/utt2spk scp:$sdata/JOB/cmvn.scp scp:$sdata/JOB/feats.scp ark:- |";;
-  lda) feats="ark,s,cs:apply-cmvn $cmvn_opts --utt2spk=ark:$sdata/JOB/utt2spk scp:$sdata/JOB/cmvn.scp scp:$sdata/JOB/feats.scp ark:- | splice-feats $splice_opts ark:- ark:- | transform-feats $srcdir/final.mat ark:- ark:- |"
+  raw) feats="ark,s,cs:$cmvn_cmd scp:$sdata/JOB/feats.scp ark:- |";;
+  lda) feats="ark,s,cs:$cmvn_cmd scp:$sdata/JOB/feats.scp ark:- | splice-feats $splice_opts ark:- ark:- | transform-feats $srcdir/final.mat ark:- ark:- |"
     ;;
   *) echo "$0: invalid feature type $feat_type" && exit 1;
 esac
@@ -141,8 +150,8 @@ else
   lat_wspecifier="ark:|lattice-scale --acoustic-scale=$post_decode_acwt ark:- ark:- | gzip -c >$dir/lat.JOB.gz"
 fi
 
-frame_subsampling_opt=
-if [ -f $srcdir/frame_subsampling_factor ]; then
+
+if [ -z $frame_subsampling_opt ] && [ -f $srcdir/frame_subsampling_factor ]; then
   # e.g. for 'chain' systems
   frame_subsampling_opt="--frame-subsampling-factor=$(cat $srcdir/frame_subsampling_factor)"
 fi
