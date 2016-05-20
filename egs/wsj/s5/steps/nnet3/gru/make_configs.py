@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+# Gated Recurrent Unit(GRU) is a kind of recurrent neural network similar to LSTM, but faster and less likely to diverge than LSTM.
+# See http://arxiv.org/pdf/1512.02595v1.pdf for more info about the network.
+
 from __future__ import print_function
 import os
 import argparse
@@ -15,8 +18,8 @@ chain_lib = imp.load_source('ncl', 'steps/nnet3/chain/nnet3_chain_lib.py')
 def GetArgs():
     # we add compulsary arguments as named arguments for readability
     parser = argparse.ArgumentParser(description="Writes config files and variables "
-                                                 "for LSTMs creation and training",
-                                     epilog="See steps/nnet3/lstm/train.sh for example.")
+                                                 "for GRU`s creation and training",
+                                     epilog="See steps/nnet3/train_rnn.py for example.")
 
     # Only one of these arguments can be specified, and one of them has to
     # be compulsarily specified
@@ -51,11 +54,9 @@ def GetArgs():
     parser.add_argument("--include-log-softmax", type=str, action=nnet3_train_lib.StrToBoolAction,
                         help="add the final softmax layer ", default=True, choices = ["false", "true"])
 
-    # LSTM options
-    parser.add_argument("--num-lstm-layers", type=int,
-                        help="Number of LSTM layers to be stacked", default=1)
-    parser.add_argument("--cell-dim", type=int,
-                        help="dimension of lstm-cell")
+    # GRU options
+    parser.add_argument("--num-gru-layers", type=int,
+                        help="Number of GRU layers to be stacked", default=1)
     parser.add_argument("--recurrent-projection-dim", type=int,
                         help="dimension of recurrent projection")
     parser.add_argument("--non-recurrent-projection-dim", type=int,
@@ -64,8 +65,6 @@ def GetArgs():
                         help="dimension of fully-connected layers")
 
     # Natural gradient options
-    parser.add_argument("--ng-per-element-scale-options", type=str,
-                        help="options to be supplied to NaturalGradientPerElementScaleComponent", default="")
     parser.add_argument("--ng-affine-options", type=str,
                         help="options to be supplied to NaturalGradientAffineComponent", default="")
 
@@ -75,14 +74,14 @@ def GetArgs():
     parser.add_argument("--clipping-threshold", type=float,
                         help="clipping threshold used in ClipGradient components, if clipping-threshold=0 no clipping is done", default=30)
     parser.add_argument("--self-repair-scale", type=float,
-                        help="A non-zero value activates the self-repair mechanism in the sigmoid and tanh non-linearities of the LSTM", default=None)
+                        help="A non-zero value activates the self-repair mechanism in the sigmoid and tanh non-linearities of the GRU", default=None)
 
     # Delay options
     parser.add_argument("--label-delay", type=int, default=None,
-                        help="option to delay the labels to make the lstm robust")
+                        help="option to delay the labels to make the gru robust")
 
-    parser.add_argument("--lstm-delay", type=str, default=None,
-                        help="option to have different delays in recurrence for each lstm")
+    parser.add_argument("--gru-delay", type=str, default=None,
+                        help="option to have different delays in recurrence for each gru")
 
     parser.add_argument("config_dir",
                         help="Directory to write config files and variables")
@@ -120,19 +119,19 @@ def CheckArgs(args):
     if not args.ivector_dim >= 0:
         raise Exception("ivector-dim has to be non-negative")
 
-    if (args.num_lstm_layers < 1):
-        sys.exit("--num-lstm-layers has to be a positive integer")
+    if (args.num_gru_layers < 1):
+        sys.exit("--num-gru-layers has to be a positive integer")
     if (args.clipping_threshold < 0):
         sys.exit("--clipping-threshold has to be a non-negative")
-    if args.lstm_delay is None:
-        args.lstm_delay = [[-1]] * args.num_lstm_layers
+    if args.gru_delay is None:
+        args.gru_delay = [[-1]] * args.num_gru_layers
     else:
         try:
-            args.lstm_delay = ParseLstmDelayString(args.lstm_delay.strip())
+            args.gru_delay = ParseGruDelayString(args.gru_delay.strip())
         except ValueError:
-            sys.exit("--lstm-delay has incorrect format value. Provided value is '{0}'".format(args.lstm_delay))
-        if len(args.lstm_delay) != args.num_lstm_layers:
-            sys.exit("--lstm-delay: Number of delays provided has to match --num-lstm-layers")
+            sys.exit("--gru-delay has incorrect format value. Provided value is '{0}'".format(args.gru_delay))
+        if len(args.gru_delay) != args.num_gru_layers:
+            sys.exit("--gru-delay: Number of delays provided has to match --num-gru-layers")
 
     return args
 
@@ -141,6 +140,22 @@ def PrintConfig(file_name, config_lines):
     f.write("\n".join(config_lines['components'])+"\n")
     f.write("\n#Component nodes\n")
     f.write("\n".join(config_lines['component-nodes'])+"\n")
+    f.close()
+
+def WriteScaleMinusOne(file_name, recurrent_projection_dim):
+    f = open(file_name, 'w')
+    f.write(" [ ")
+    for i in range(recurrent_projection_dim):
+        f.write("-1 ")
+    f.write("]\n")
+    f.close()
+
+def WriteBiasOne(file_name, recurrent_projection_dim):
+    f = open(file_name, 'w')
+    f.write(" [ ")
+    for i in range(recurrent_projection_dim):
+        f.write("1 ")
+    f.write("]\n")
     f.close()
 
 def ParseSpliceString(splice_indexes, label_delay=None):
@@ -185,32 +200,35 @@ def ParseSpliceString(splice_indexes, label_delay=None):
             'num_hidden_layers':len(splice_array)
             }
 
-def ParseLstmDelayString(lstm_delay):
-    ## Work out lstm_delay e.g. "-1 [-1,1] -2" -> list([ [-1], [-1, 1], [-2] ])
-    split1 = lstm_delay.split(" ");
-    lstm_delay_array = []
+def ParseGruDelayString(gru_delay):
+    ## Work out gru_delay e.g. "-1 [-1,1] -2" -> list([ [-1], [-1, 1], [-2] ])
+    split1 = gru_delay.split(" ");
+    gru_delay_array = []
     try:
         for i in range(len(split1)):
             indexes = map(lambda x: int(x), split1[i].strip().lstrip('[').rstrip(']').strip().split(","))
             if len(indexes) < 1:
-                raise ValueError("invalid --lstm-delay argument, too-short element: "
-                                + lstm_delay)
+                raise ValueError("invalid --gru-delay argument, too-short element: "
+                                + gru_delay)
 	    elif len(indexes) == 2 and indexes[0] * indexes[1] >= 0:
-                raise ValueError('Warning: ' + str(indexes) + ' is not a standard BLSTM mode. There should be a negative delay for the forward, and a postive delay for the backward.')
-            lstm_delay_array.append(indexes)
+                raise ValueError('Warning: ' + str(indexes) + ' is not a standard BGRU mode. There should be a negative delay for the forward, and a postive delay for the backward.')
+            gru_delay_array.append(indexes)
     except ValueError as e:
-        raise ValueError("invalid --lstm-delay argument " + lstm_delay + str(e))
+        raise ValueError("invalid --gru-delay argument " + gru_delay + str(e))
 
-    return lstm_delay_array
+    return gru_delay_array
 
 
 def MakeConfigs(config_dir, feat_dim, ivector_dim, num_targets,
-                splice_indexes, lstm_delay, cell_dim,
+                splice_indexes, gru_delay,
                 recurrent_projection_dim, non_recurrent_projection_dim,
-                num_lstm_layers, num_hidden_layers,
+                num_gru_layers, num_hidden_layers,
                 norm_based_clipping, clipping_threshold,
-                ng_per_element_scale_options, ng_affine_options,
+                ng_affine_options,
                 label_delay, include_log_softmax, xent_regularize, self_repair_scale):
+
+    WriteScaleMinusOne(config_dir + '/scale_minus_one.vec', recurrent_projection_dim)
+    WriteBiasOne(config_dir + '/bias_one.vec', recurrent_projection_dim)
 
     config_lines = {'components':[], 'component-nodes':[]}
 
@@ -226,26 +244,26 @@ def MakeConfigs(config_dir, feat_dim, ivector_dim, num_targets,
 
     prev_layer_output = nodes.AddLdaLayer(config_lines, "L0", prev_layer_output, config_dir + '/lda.mat')
 
-    for i in range(num_lstm_layers):
-        if len(lstm_delay[i]) == 2: # BLSTM layer case, add both forward and backward
-            prev_layer_output1 = nodes.AddLstmLayer(config_lines, "BLstm{0}_forward".format(i+1), prev_layer_output, cell_dim,
+    for i in range(num_gru_layers):
+        if len(gru_delay[i]) == 2: # BGRU layer case, add both forward and backward
+            prev_layer_output1 = nodes.AddGruLayer(config_lines, "BGru{0}_forward".format(i+1), prev_layer_output,
                                              recurrent_projection_dim, non_recurrent_projection_dim,
-                                             clipping_threshold, norm_based_clipping,
-                                             ng_per_element_scale_options, ng_affine_options,
-                                             lstm_delay = lstm_delay[i][0], self_repair_scale = self_repair_scale)
-            prev_layer_output2 = nodes.AddLstmLayer(config_lines, "BLstm{0}_backward".format(i+1), prev_layer_output, cell_dim,
+                                             config_dir + '/scale_minus_one.vec', config_dir + '/bias_one.vec',
+                                             clipping_threshold, norm_based_clipping, ng_affine_options,
+                                             gru_delay = gru_delay[i][0], self_repair_scale = self_repair_scale)
+            prev_layer_output2 = nodes.AddGruLayer(config_lines, "BGru{0}_backward".format(i+1), prev_layer_output,
                                              recurrent_projection_dim, non_recurrent_projection_dim,
-                                             clipping_threshold, norm_based_clipping,
-                                             ng_per_element_scale_options, ng_affine_options,
-                                             lstm_delay = lstm_delay[i][1], self_repair_scale = self_repair_scale)
+                                             config_dir + '/scale_minus_one.vec', config_dir + '/bias_one.vec',
+                                             clipping_threshold, norm_based_clipping, ng_affine_options,
+                                             gru_delay = gru_delay[i][1], self_repair_scale = self_repair_scale)
             prev_layer_output['descriptor'] = 'Append({0}, {1})'.format(prev_layer_output1['descriptor'], prev_layer_output2['descriptor'])
             prev_layer_output['dimension'] = prev_layer_output1['dimension'] + prev_layer_output2['dimension']
-        else: # LSTM layer case
-            prev_layer_output = nodes.AddLstmLayer(config_lines, "Lstm{0}".format(i+1), prev_layer_output, cell_dim,
+        else: # GRU layer case
+            prev_layer_output = nodes.AddGruLayer(config_lines, "Gru{0}".format(i+1), prev_layer_output,
                                             recurrent_projection_dim, non_recurrent_projection_dim,
-                                            clipping_threshold, norm_based_clipping,
-                                            ng_per_element_scale_options, ng_affine_options,
-                                            lstm_delay = lstm_delay[i][0], self_repair_scale = self_repair_scale)
+                                            config_dir + '/scale_minus_one.vec', config_dir + '/bias_one.vec',
+                                            clipping_threshold, norm_based_clipping, ng_affine_options,
+                                            gru_delay = gru_delay[i][0], self_repair_scale = self_repair_scale)
         # make the intermediate config file for layerwise discriminative
         # training
         nodes.AddFinalLayer(config_lines, prev_layer_output, num_targets, ng_affine_options, label_delay = label_delay, include_log_softmax = include_log_softmax)
@@ -258,15 +276,8 @@ def MakeConfigs(config_dir, feat_dim, ivector_dim, num_targets,
 
         config_files['{0}/layer{1}.config'.format(config_dir, i+1)] = config_lines
         config_lines = {'components':[], 'component-nodes':[]}
-        if len(lstm_delay[i]) == 2:
-            # since the form 'Append(Append(xx, yy), zz)' is not allowed, here we don't wrap the descriptor with 'Append()' so that we would have the form
-            # 'Append(xx, yy, zz)' in the next lstm layer
-            prev_layer_output['descriptor'] = '{0}, {1}'.format(prev_layer_output1['descriptor'], prev_layer_output2['descriptor'])
 
-    if len(lstm_delay[i]) == 2:
-        # since there is no 'Append' in 'AffRelNormLayer', here we wrap the descriptor with 'Append()'
-        prev_layer_output['descriptor'] = 'Append({0})'.format(prev_layer_output['descriptor'])
-    for i in range(num_lstm_layers, num_hidden_layers):
+    for i in range(num_gru_layers, num_hidden_layers):
         prev_layer_output = nodes.AddAffRelNormLayer(config_lines, "L{0}".format(i+1),
                                                prev_layer_output, hidden_dim,
                                                ng_affine_options, self_repair_scale = self_repair_scale)
@@ -290,15 +301,15 @@ def MakeConfigs(config_dir, feat_dim, ivector_dim, num_targets,
 
 
 
-def ProcessSpliceIndexes(config_dir, splice_indexes, label_delay, num_lstm_layers):
+def ProcessSpliceIndexes(config_dir, splice_indexes, label_delay, num_gru_layers):
     parsed_splice_output = ParseSpliceString(splice_indexes.strip(), label_delay)
     left_context = parsed_splice_output['left_context']
     right_context = parsed_splice_output['right_context']
     num_hidden_layers = parsed_splice_output['num_hidden_layers']
     splice_indexes = parsed_splice_output['splice_indexes']
 
-    if (num_hidden_layers < num_lstm_layers):
-        raise Exception("num-lstm-layers : number of lstm layers has to be greater than number of layers, decided based on splice-indexes")
+    if (num_hidden_layers < num_gru_layers):
+        raise Exception("num-gru-layers : number of gru layers has to be greater than number of layers, decided based on splice-indexes")
 
     # write the files used by other scripts like steps/nnet3/get_egs.sh
     f = open(config_dir + "/vars", "w")
@@ -313,16 +324,16 @@ def ProcessSpliceIndexes(config_dir, splice_indexes, label_delay, num_lstm_layer
 
 def Main():
     args = GetArgs()
-    [left_context, right_context, num_hidden_layers, splice_indexes] = ProcessSpliceIndexes(args.config_dir, args.splice_indexes, args.label_delay, args.num_lstm_layers)
+    [left_context, right_context, num_hidden_layers, splice_indexes] = ProcessSpliceIndexes(args.config_dir, args.splice_indexes, args.label_delay, args.num_gru_layers)
 
     MakeConfigs(args.config_dir,
                 args.feat_dim, args.ivector_dim, args.num_targets,
-                splice_indexes, args.lstm_delay, args.cell_dim,
+                splice_indexes, args.gru_delay,
                 args.recurrent_projection_dim, args.non_recurrent_projection_dim,
-                args.num_lstm_layers, num_hidden_layers,
+                args.num_gru_layers, num_hidden_layers,
                 args.norm_based_clipping,
                 args.clipping_threshold,
-                args.ng_per_element_scale_options, args.ng_affine_options,
+                args.ng_affine_options,
                 args.label_delay, args.include_log_softmax, args.xent_regularize,
                 args.self_repair_scale)
 
