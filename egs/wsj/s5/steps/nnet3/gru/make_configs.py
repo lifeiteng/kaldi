@@ -276,6 +276,14 @@ def MakeConfigs(config_dir, feat_dim, ivector_dim, num_targets,
 
         config_files['{0}/layer{1}.config'.format(config_dir, i+1)] = config_lines
         config_lines = {'components':[], 'component-nodes':[]}
+        if len(gru_delay[i]) == 2:
+            # since the form 'Append(Append(xx, yy), zz)' is not allowed, here we don't wrap the descriptor with 'Append()' so that we would have the form
+            # 'Append(xx, yy, zz)' in the next lstm layer
+            prev_layer_output['descriptor'] = '{0}, {1}'.format(prev_layer_output1['descriptor'], prev_layer_output2['descriptor'])
+
+    if len(gru_delay[i]) == 2:
+        # since there is no 'Append' in 'AffRelNormLayer', here we wrap the descriptor with 'Append()'
+        prev_layer_output['descriptor'] = 'Append({0})'.format(prev_layer_output['descriptor'])
 
     for i in range(num_gru_layers, num_hidden_layers):
         prev_layer_output = nodes.AddAffRelNormLayer(config_lines, "L{0}".format(i+1),

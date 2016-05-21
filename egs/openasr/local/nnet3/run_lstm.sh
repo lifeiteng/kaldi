@@ -19,11 +19,11 @@ train_stage=-10
 exit_stage=1000000
 
 speed_perturb=false
-common_egs_dir=
+
 reporting_email=""
 
 # LSTM options
-splice_indexes="-3,-1,0,1,2,3 0 0"
+splice_indexes="-2,-1,0,1,2 0 0"
 lstm_delay=" [-1,1] [-2,2] [-3,3] "
 label_delay=0
 num_lstm_layers=3
@@ -65,8 +65,8 @@ data=data_fbank_hires
 
 ali_dir=exp/tri3_all_ali
 ali_dir=exp/tri2b_all_ali
-
-graph_dir=exp/tri3/graph_lang_biglm_tg
+common_egs_dir=exp/nnet3/gru-bidirectional-ld0-mpc2/egs
+graph_dir=exp/tri2b/graph_lang_biglm_tg
 
 decode_sets="non-native forum"
 decode_suffix=""
@@ -85,7 +85,7 @@ gpus="0 1 2"
 use_gpu=true
 
 train_set=train
-use_gru_layer=false
+use_gru_layer=true
 
 # End configuration section.
 
@@ -115,6 +115,7 @@ else
 fi
 
 dir=$dir${affix:+-$affix}-ld${label_delay}-mpc${max_param_change}${suffix}
+# dir=exp/nnet3/test
 mkdir -p $dir
 
 # make egs dir on /ssd
@@ -150,26 +151,25 @@ chmod -R +x local
 if $python_train;then
   if [ $stage -le 9 ]; then
     echo "$0: creating neural net configs";
-    
+    config_extra_opts=()
+
     if $use_gru_layer;then
       echo "$0: Use GRU Layer!"
-      config_extra_opts=()
-      gru_delay=0
+      gru_delay=$lstm_delay
       [ ! -z "$gru_delay" ] && config_extra_opts+=(--gru-delay "$gru_delay")
-
       steps/nnet3/gru/make_configs.py  "${config_extra_opts[@]}" \
         --splice-indexes "$splice_indexes " \
         --num-gru-layers $num_lstm_layers \
         --feat-dir $data/${train_set} \
         --ali-dir $ali_dir \
-        --recurrent-projection-dim $recurrent_projection_dim \
-        --non-recurrent-projection-dim $non_recurrent_projection_dim \
+        --recurrent-projection-dim 1024 \
+        --non-recurrent-projection-dim 512 \
         --hidden-dim $hidden_dim \
         --norm-based-clipping true \
-        --label-delay $gru_delay \
+        --label-delay $label_delay \
+        --gru-delay "$gru_delay" \
        $dir/configs || exit 1;
     else
-      config_extra_opts=()
       [ ! -z "$lstm_delay" ] && config_extra_opts+=(--lstm-delay "$lstm_delay")
       steps/nnet3/lstm/make_configs.py  "${config_extra_opts[@]}" \
         --feat-dir $data/${train_set} \
