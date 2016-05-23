@@ -13,7 +13,7 @@ cmd=run.pl
 # Begin configuration.
 scale_opts="--transition-scale=1.0 --acoustic-scale=0.1 --self-loop-scale=0.1"
 beam=10
-retry_beam=40
+retry_beam=20
 transform_dir=
 iter=final
 use_gpu=true
@@ -138,16 +138,20 @@ if [ -f $srcdir/frame_subsampling_factor ]; then
   cp $srcdir/frame_subsampling_factor $dir
 fi
 
-$cmd $queue_opt JOB=1:$nj $dir/log/align.JOB.log \
-  compile-train-graphs $dir/tree $srcdir/${iter}.mdl  $lang/L.fst "$tra" ark:- \| \
-  nnet3-align-compiled $scale_opts $ivector_opts $frame_subsampling_opt \
-  --frames-per-chunk=$frames_per_chunk \
-  --extra-left-context=$extra_left_context \
-  --extra-right-context=$extra_right_context \
-  --extra-left-context-initial=$extra_left_context_initial \
-  --extra-right-context-final=$extra_right_context_final \
-  $gpu_opt --beam=$beam --retry-beam=$retry_beam \
-  $srcdir/${iter}.mdl ark:- "$feats" "ark:|gzip -c >$dir/ali.JOB.gz" || exit 1;
+for n in $(seq $nj);do
+  $cmd $queue_opt JOB=$n:$n $dir/log/align.JOB.log \
+    compile-train-graphs $dir/tree $srcdir/${iter}.mdl  $lang/L.fst "$tra" ark:- \| \
+    nnet3-align-compiled $scale_opts $ivector_opts $frame_subsampling_opt \
+    --frames-per-chunk=$frames_per_chunk \
+    --extra-left-context=$extra_left_context \
+    --extra-right-context=$extra_right_context \
+    --extra-left-context-initial=$extra_left_context_initial \
+    --extra-right-context-final=$extra_right_context_final \
+    $gpu_opt --beam=$beam --retry-beam=$retry_beam \
+    $srcdir/${iter}.mdl ark:- "$feats" "ark:|gzip -c >$dir/ali.JOB.gz" || exit 1 &
+  sleep 5
+done
+wait
 
 echo "$0: done aligning data."
 

@@ -11,7 +11,7 @@ cmd=run.pl
 # Begin configuration.
 scale_opts="--transition-scale=1.0 --acoustic-scale=0.1 --self-loop-scale=0.1"
 beam=10
-retry_beam=40
+retry_beam=16
 transform_dir=
 iter=final
 use_gpu=no
@@ -116,10 +116,14 @@ echo "$0: aligning data in $data using model from $srcdir, putting alignments in
 
 tra="ark:utils/sym2int.pl --map-oov $oov -f 2- $lang/words.txt $sdata/JOB/text|";
 
-$cmd JOB=1:$nj $dir/log/align.JOB.log \
-  compile-train-graphs $dir/tree $srcdir/${iter}.mdl  $lang/L.fst "$tra" ark:- \| \
-  nnet-align-compiled $scale_opts --use-gpu=$use_gpu --beam=$beam --retry-beam=$retry_beam \
-    $srcdir/${iter}.mdl ark:- "$feats" "ark:|gzip -c >$dir/ali.JOB.gz" || exit 1;
+for n in $(seq $nj);do
+  $cmd JOB=$n:$n $dir/log/align.JOB.log \
+    compile-train-graphs $dir/tree $srcdir/${iter}.mdl  $lang/L.fst "$tra" ark:- \| \
+    nnet-align-compiled $scale_opts --use-gpu=$use_gpu --beam=$beam --retry-beam=$retry_beam \
+      $srcdir/${iter}.mdl ark:- "$feats" "ark:|gzip -c >$dir/ali.JOB.gz" || exit 1 &
+  sleep 10
+done
+wait
 
 echo "$0: done aligning data."
 

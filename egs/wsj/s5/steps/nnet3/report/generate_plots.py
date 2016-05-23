@@ -256,7 +256,8 @@ def GeneratePlots(exp_dir, output_dir, comparison_dir = None, start_iter = 1, is
         else:
             raise e
     if plot:
-        latex_report = LatexReport("{0}/report.pdf".format(output_dir))
+        latex_report = None
+        # latex_report = LatexReport("{0}/report.pdf".format(output_dir))
     else:
         latex_report = None
 

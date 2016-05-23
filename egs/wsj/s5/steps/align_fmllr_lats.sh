@@ -10,6 +10,9 @@
 # Begin configuration section.  
 stage=0
 nj=4
+max_jobs_run=
+subset_jobs=
+
 cmd=run.pl
 # Begin configuration.
 scale_opts="--transition-scale=1.0 --self-loop-scale=0.1"
@@ -105,16 +108,26 @@ if [ $stage -le 1 ]; then
   # as explained above, we compiled the transition probs into the training
   # graphs.
   echo "$0: aligning data in $data using $alimdl and speaker-independent features."
-  $cmd JOB=1:$nj $dir/log/align_pass1.JOB.log \
-    gmm-align-compiled --transition-scale=0.0 --self-loop-scale=0.0 --acoustic-scale=$acoustic_scale \
-        --beam=$beam --retry-beam=$retry_beam "$alimdl_cmd" \
-    "ark:gunzip -c $dir/fsts.JOB.gz|" "$sifeats" "ark:|gzip -c >$dir/pre_ali.JOB.gz" || exit 1;
+  if [ ! -z "$subset_jobs" ];then
+    for n in $subset_jobs;do
+      $cmd JOB=$n:$n $dir/log/align_pass1.JOB.log \
+        gmm-align-compiled --transition-scale=0.0 --self-loop-scale=0.0 --acoustic-scale=$acoustic_scale \
+            --beam=$beam --retry-beam=$retry_beam "$alimdl_cmd" \
+        "ark:gunzip -c $dir/fsts.JOB.gz|" "$sifeats" "ark:|gzip -c >$dir/pre_ali.JOB.gz" || exit 1 &
+    done
+  else
+    $cmd JOB=1:$nj $dir/log/align_pass1.JOB.log \
+      gmm-align-compiled --transition-scale=0.0 --self-loop-scale=0.0 --acoustic-scale=$acoustic_scale \
+          --beam=$beam --retry-beam=$retry_beam "$alimdl_cmd" \
+      "ark:gunzip -c $dir/fsts.JOB.gz|" "$sifeats" "ark:|gzip -c >$dir/pre_ali.JOB.gz" || exit 1;
+  fi
 fi
 
 if [ $stage -le 2 ]; then
   echo "$0: computing fMLLR transforms"
+  [ -z $max_jobs_run ] && max_jobs_run=$nj
   if [ "$alimdl" != "$mdl" ]; then
-    $cmd JOB=1:$nj $dir/log/fmllr.JOB.log \
+    $cmd --max-jobs-run $max_jobs_run JOB=1:$nj $dir/log/fmllr.JOB.log \
       ali-to-post "ark:gunzip -c $dir/pre_ali.JOB.gz|" ark:- \| \
       weight-silence-post 0.0 $silphonelist $alimdl ark:- ark:- \| \
       gmm-post-to-gpost $alimdl "$sifeats" ark:- ark:- \| \
@@ -122,7 +135,7 @@ if [ $stage -le 2 ]; then
       --spk2utt=ark:$sdata/JOB/spk2utt $mdl "$sifeats" \
       ark,s,cs:- ark:$dir/trans.JOB || exit 1;
   else
-    $cmd JOB=1:$nj $dir/log/fmllr.JOB.log \
+    $cmd --max-jobs-run $max_jobs_run JOB=1:$nj $dir/log/fmllr.JOB.log \
       ali-to-post "ark:gunzip -c $dir/pre_ali.JOB.gz|" ark:- \| \
       weight-silence-post 0.0 $silphonelist $alimdl ark:- ark:- \| \
       gmm-est-fmllr --fmllr-update-type=$fmllr_update_type \

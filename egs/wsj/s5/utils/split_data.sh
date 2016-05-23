@@ -119,6 +119,12 @@ for f in spk2gender spk2warp cmvn.scp; do
   if [ -f $data/$f ]; then
     utils/filter_scps.pl JOB=1:$numsplit \
       $data/split$numsplit/JOB/spk2utt $data/$f $data/split$numsplit/JOB/$f || exit 1;
+    if [ $f == "cmvn.scp" ];then
+      echo "$0: cp $data/cmvn.scp to $data/split$numsplit/x/cmvn.scp"
+      for n in $(seq $numsplit);do
+        cp $data/$f $data/split$numsplit/$n/$f || exit 1;
+      done
+    fi
   fi
 done
 
@@ -141,5 +147,7 @@ if [ -f $data/segments ]; then
   fi
   for f in $data/split$numsplit/*/tmp.reco; do rm $f; done
 fi
+
+echo "$0 done."
 
 exit 0
