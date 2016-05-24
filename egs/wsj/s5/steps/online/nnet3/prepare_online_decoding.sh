@@ -170,7 +170,7 @@ if $online_cmvn; then
   for f in $cmvn_scp $srcdir/cmvn_opts; do
     [ ! -f $f ] && echo "$0: no such file $f" && exit 1;
   done
-  cat $srcdir/cmvn_opts | sed 's/means/mean/g' >$dir/conf/cmvn_opts || exit 1;
+  cat $srcdir/cmvn_opts | sed 's/means/mean/g' | awk '{for(i=1;i<=NF;i++) print $i;}' >$dir/conf/cmvn_opts || exit 1;
   echo "--online-cmvn-config=$dir/conf/cmvn_opts" >>$conf
 
   # create global_cmvn.stats
