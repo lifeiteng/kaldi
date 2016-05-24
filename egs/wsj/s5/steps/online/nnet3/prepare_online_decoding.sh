@@ -30,6 +30,9 @@ max_count=100   # This max-count of 100 can make iVectors more consistent for
                 # 0.1, --max-count 100 starts having effect after 1000 frames,
                 # or 10 seconds of data.
 iter=final
+
+online_cmvn=false
+data=
 # End configuration.
 
 echo "$0 $@"  # Print the command line for logging
@@ -161,6 +164,21 @@ if $add_pitch; then
   fi
   cp $online_pitch_config $dir/conf/online_pitch.conf || exit 1;
   echo "--online-pitch-config=$dir/conf/online_pitch.conf" >>$conf
+fi
+
+if $online_cmvn; then
+  for f in $data/cmvn.scp $srcdir/cmvn_opts; do
+    [ ! -f $f ] && echo "$0: no such file $f" && exit 1;
+  done
+  cat $srcdir/cmvn_opts | sed 's/means/mean/g' $dir/cmvn_opts || exit 1;
+  echo "--online-cmvn-config=$dir/conf/cmvn_opts" >>$conf
+
+  # create global_cmvn.stats
+  if ! matrix-sum --binary=false --scale=true scp:$data/cmvn.scp $dir/conf/global_cmvn.stats 2>/dev/null; then
+    echo "$0: Error summing cmvn stats"
+    exit 1
+  fi
+  echo "--global-cmvn-stats=$dir/conf/global_cmvn.stats" >>$conf
 fi
 
 silphonelist=`cat $lang/phones/silence.csl` || exit 1;

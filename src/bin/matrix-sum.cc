@@ -22,6 +22,8 @@
 #include "util/common-utils.h"
 #include "matrix/kaldi-matrix.h"
 
+bool scale_mat_num = false;
+
 namespace kaldi {
 
 // sums a bunch of archives to produce one archive
@@ -138,7 +140,10 @@ int32 TypeTwoUsage(const ParseOptions &po,
       }
     }
   }
-
+  if (scale_mat_num && num_done) {
+    KALDI_LOG << "Scale sum by " << 1.0/num_done;
+    sum.Scale(1.0/num_done);
+  }
   Matrix<BaseFloat> sum_float(sum);
   WriteKaldiObject(sum_float, po.GetArg(2), binary);
 
@@ -216,6 +221,8 @@ int main(int argc, char *argv[]) {
                 "(only for type one usage)");
     po.Register("scale2", &scale2, "Scale applied to second matrix "
                 "(only for type one usage)");
+    po.Register("scale", &scale_mat_num, "Scale applied to all matrix "
+                "(only for type two usage)");
     po.Register("binary", &binary, "If true, write output as binary (only "
                 "relevant for usage types two or three");
     
