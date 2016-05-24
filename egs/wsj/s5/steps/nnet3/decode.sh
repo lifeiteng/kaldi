@@ -97,7 +97,7 @@ splice_opts=`cat $srcdir/splice_opts 2>/dev/null`
 cmvn_cmd="apply-cmvn $cmvn_opts --utt2spk=ark:$sdata/JOB/utt2spk scp:$sdata/JOB/cmvn.scp"
 if $online_cmvn;then
   cmvn_opts=`echo $cmvn_opts | sed 's/means/mean/g'`
-  cmvn_cmd="apply-cmvn-online $cmvn_opts --spk2utt=ark:$sdata/JOB/spk2utt 'matrix-sum --scale=true scp:$data/cmvn.scp -|'"
+  cmvn_cmd="apply-cmvn-online $cmvn_opts --spk2utt=ark:$sdata/JOB/spk2utt 'matrix-sum scp:$data/cmvn.scp -|'"
 fi
 
 case $feat_type in
