@@ -57,8 +57,8 @@ OnlineNnet2FeaturePipelineInfo::OnlineNnet2FeaturePipelineInfo(
   use_cmvn = false;
   if (config.online_cmvn_config != "") {
     use_cmvn = true;
-    ReadConfigFromFile(config.online_cmvn_config,
-                        &cmvn_opts);
+    KALDI_VLOG(2) << "Read cmvn config.";
+    ReadConfigFromFile(config.online_cmvn_config, &cmvn_opts);
     global_cmvn_stats_rxfilename = config.global_cmvn_stats_rxfilename;
     if (global_cmvn_stats_rxfilename == "")
       KALDI_ERR << "--global-cmvn-stats option is required.";
@@ -102,6 +102,7 @@ OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
   {
     cmvn_ = NULL;
     if (info_.use_cmvn) {
+      KALDI_VLOG(2) << "Using cmvn feature.";
       KALDI_ASSERT(info_.global_cmvn_stats_rxfilename != "");
       ReadKaldiObject(info_.global_cmvn_stats_rxfilename,
                       &global_cmvn_stats_);
@@ -115,31 +116,25 @@ OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
                                   kCopyData);
         global_cmvn_stats_.ColRange(dim, 1).CopyFromMat(last_col);
       }
+      Matrix<double> global_cmvn_stats_dbl(global_cmvn_stats_);
+      OnlineCmvnState initial_state(global_cmvn_stats_dbl);
+      cmvn_ = new OnlineCmvn(info_.cmvn_opts, initial_state, base_feature_);
+      feature_ = cmvn_;
+    } else {
+      feature_ = base_feature_;
     }
-    Matrix<double> global_cmvn_stats_dbl(global_cmvn_stats_);
-    OnlineCmvnState initial_state(global_cmvn_stats_dbl);
-    cmvn_ = new OnlineCmvn(info_.cmvn_opts, initial_state, base_feature_);
   }
 
   if (info_.add_pitch) {
     pitch_ = new OnlinePitchFeature(info_.pitch_opts);
     pitch_feature_ = new OnlineProcessPitch(info_.pitch_process_opts,
                                             pitch_);
-    if (info_.use_cmvn) {
-      feature_plus_optional_pitch_ = new OnlineAppendFeature(cmvn_,
-                                                           pitch_feature_);
-    } else {
-      feature_plus_optional_pitch_ = new OnlineAppendFeature(base_feature_,
-                                                             pitch_feature_);
-    }
+    feature_plus_optional_pitch_ = new OnlineAppendFeature(feature_,
+                                                         pitch_feature_);
   } else {
     pitch_ = NULL;
     pitch_feature_ = NULL;
-    if (info_.use_cmvn) {
-      feature_plus_optional_pitch_ = cmvn_;
-    } else {
-      feature_plus_optional_pitch_ = base_feature_;
-    }
+    feature_plus_optional_pitch_ = feature_;
   }
 
   if (info_.use_ivectors) {
@@ -210,7 +205,7 @@ OnlineNnet2FeaturePipeline::~OnlineNnet2FeaturePipeline() {
   if (final_feature_ != feature_plus_optional_pitch_)
     delete final_feature_;
   delete ivector_feature_;
-  if (feature_plus_optional_pitch_ != base_feature_)
+  if (feature_plus_optional_pitch_ != feature_)
     delete feature_plus_optional_pitch_;
   delete pitch_feature_;
   delete pitch_;
