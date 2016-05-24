@@ -425,7 +425,7 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
                          num_chunk_per_minibatch = num_chunk_per_minibatch),
                 wait = False)
             if str(i) == '-1':
-                time.sleep(2.5)
+                time.sleep(5)
             job += 1
             gpu_processes.append(process_handle)
 

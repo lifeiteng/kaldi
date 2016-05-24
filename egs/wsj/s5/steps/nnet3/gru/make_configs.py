@@ -79,9 +79,11 @@ def GetArgs():
     # Delay options
     parser.add_argument("--label-delay", type=int, default=None,
                         help="option to delay the labels to make the gru robust")
-
     parser.add_argument("--gru-delay", type=str, default=None,
                         help="option to have different delays in recurrence for each gru")
+    parser.add_argument("--add-rowconv", type=str, action = nnet3_train_lib.StrToBoolAction,
+                        choices = ["true", "false"],
+                        help="Add RowConvolution layer", default=False)
 
     parser.add_argument("config_dir",
                         help="Directory to write config files and variables")
@@ -158,7 +160,38 @@ def WriteBiasOne(file_name, recurrent_projection_dim):
     f.write("]\n")
     f.close()
 
-def ParseSpliceString(splice_indexes, label_delay=None):
+
+# See Deep Speech 2 - End-to-End Speech Recognition in English and Mandarin
+# except plus a bias
+def AddRowConvolutionLayer(config_lines, name, input, left_context, right_context):
+    filter_input_splice_indexes = range(-1 * left_context, right_context + 1)
+    list = [('Offset({0}, {1})'.format(input['descriptor'], n) if n != 0 else input['descriptor']) for n in filter_input_splice_indexes]
+    filter_input_descriptor = 'Append({0})'.format(' , '.join(list))
+    filter_input_descriptor = {'descriptor':filter_input_descriptor,
+                               'dimension':len(filter_input_splice_indexes) * input['dimension']}
+
+
+    # add permute component to shuffle the feature columns of the Append
+    # descriptor output so that columns corresponding to the same feature index
+    # are contiguous add a block-affine component to collapse all the feature
+    # indexes across time steps into a single value
+    num_feats = input['dimension']
+    num_times = len(filter_input_splice_indexes)
+    column_map = []
+    for i in range(num_feats):
+        for j in range(num_times):
+            column_map.append(j * num_feats + i)
+    permuted_output_descriptor = nodes.AddPermuteLayer(config_lines,
+            name, filter_input_descriptor, column_map)
+
+    # add a block-affine component
+    output_descriptor = nodes.AddBlockAffineLayer(config_lines, name,
+                                                  permuted_output_descriptor,
+                                                  num_feats, num_feats)
+    return output_descriptor
+
+
+def ParseSpliceString(splice_indexes, label_delay=None, add_rowconv=False):
     ## Work out splice_array e.g. splice_array = [ [ -3,-2,...3 ], [0], [-2,2], .. [ -8,8 ] ]
     split1 = splice_indexes.split(" ");  # we already checked the string is nonempty.
     if len(split1) < 1:
@@ -180,7 +213,8 @@ def ParseSpliceString(splice_indexes, label_delay=None):
                                 + splice_indexes)
 
             if (i > 0)  and ((len(indexes) != 1) or (indexes[0] != 0)):
-                raise ValueError("elements of --splice-indexes splicing is only allowed initial layer.")
+                if not add_rowconv:
+                    raise ValueError("elements of --splice-indexes splicing is only allowed initial layer.")
 
             if not indexes == sorted(indexes):
                 raise ValueError("elements of --splice-indexes must be sorted: "
@@ -221,11 +255,11 @@ def ParseGruDelayString(gru_delay):
 
 def MakeConfigs(config_dir, feat_dim, ivector_dim, num_targets,
                 splice_indexes, gru_delay,
-                recurrent_projection_dim, non_recurrent_projection_dim,
+                recurrent_projection_dim, non_recurrent_projection_dim, hidden_dim,
                 num_gru_layers, num_hidden_layers,
                 norm_based_clipping, clipping_threshold,
                 ng_affine_options,
-                label_delay, include_log_softmax, xent_regularize, self_repair_scale):
+                label_delay, include_log_softmax, xent_regularize, self_repair_scale, add_rowconv):
 
     WriteScaleMinusOne(config_dir + '/scale_minus_one.vec', recurrent_projection_dim)
     WriteBiasOne(config_dir + '/bias_one.vec', recurrent_projection_dim)
@@ -286,9 +320,15 @@ def MakeConfigs(config_dir, feat_dim, ivector_dim, num_targets,
         prev_layer_output['descriptor'] = 'Append({0})'.format(prev_layer_output['descriptor'])
 
     for i in range(num_gru_layers, num_hidden_layers):
-        prev_layer_output = nodes.AddAffRelNormLayer(config_lines, "L{0}".format(i+1),
-                                               prev_layer_output, hidden_dim,
-                                               ng_affine_options, self_repair_scale = self_repair_scale)
+        if add_rowconv and i == num_gru_layers:
+            left_context = abs(splice_indexes[i][0])
+            right_context = abs(splice_indexes[i][-1])
+            prev_layer_output = AddRowConvolutionLayer(config_lines, "L{0}".format(i+1),
+                                               prev_layer_output, left_context, right_context)
+        else:
+            prev_layer_output = nodes.AddAffRelNormLayer(config_lines, "L{0}".format(i+1),
+                                                   prev_layer_output, hidden_dim,
+                                                   ng_affine_options, self_repair_scale = self_repair_scale)
         # make the intermediate config file for layerwise discriminative
         # training
         nodes.AddFinalLayer(config_lines, prev_layer_output, num_targets, ng_affine_options, label_delay = label_delay, include_log_softmax = include_log_softmax)
@@ -309,8 +349,8 @@ def MakeConfigs(config_dir, feat_dim, ivector_dim, num_targets,
 
 
 
-def ProcessSpliceIndexes(config_dir, splice_indexes, label_delay, num_gru_layers):
-    parsed_splice_output = ParseSpliceString(splice_indexes.strip(), label_delay)
+def ProcessSpliceIndexes(config_dir, splice_indexes, label_delay, num_gru_layers, add_rowconv=False):
+    parsed_splice_output = ParseSpliceString(splice_indexes.strip(), label_delay, add_rowconv)
     left_context = parsed_splice_output['left_context']
     right_context = parsed_splice_output['right_context']
     num_hidden_layers = parsed_splice_output['num_hidden_layers']
@@ -332,18 +372,19 @@ def ProcessSpliceIndexes(config_dir, splice_indexes, label_delay, num_gru_layers
 
 def Main():
     args = GetArgs()
-    [left_context, right_context, num_hidden_layers, splice_indexes] = ProcessSpliceIndexes(args.config_dir, args.splice_indexes, args.label_delay, args.num_gru_layers)
+    [left_context, right_context, num_hidden_layers, splice_indexes] = ProcessSpliceIndexes(args.config_dir,
+        args.splice_indexes, args.label_delay, args.num_gru_layers, args.add_rowconv)
 
     MakeConfigs(args.config_dir,
                 args.feat_dim, args.ivector_dim, args.num_targets,
                 splice_indexes, args.gru_delay,
-                args.recurrent_projection_dim, args.non_recurrent_projection_dim,
+                args.recurrent_projection_dim, args.non_recurrent_projection_dim, args.hidden_dim,
                 args.num_gru_layers, num_hidden_layers,
                 args.norm_based_clipping,
                 args.clipping_threshold,
                 args.ng_affine_options,
                 args.label_delay, args.include_log_softmax, args.xent_regularize,
-                args.self_repair_scale)
+                args.self_repair_scale, args.add_rowconv)
 
 if __name__ == "__main__":
     Main()

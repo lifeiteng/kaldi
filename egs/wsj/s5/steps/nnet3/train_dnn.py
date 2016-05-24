@@ -361,7 +361,7 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
                      shuffle_buffer_size = shuffle_buffer_size,
                      minibatch_size = minibatch_size), wait = False)
             if int(i) <= 0:
-                time.sleep(2.5)
+                time.sleep(5)
             job += 1
             gpu_processes.append(process_handle)
         if run_opts.gpus_wait:

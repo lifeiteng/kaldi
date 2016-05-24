@@ -481,21 +481,19 @@ def AddGruLayer(config_lines,
     
     components.append("# projection matrices : W-m; and nonlinearity transform : relu and renorm")
     components.append("component name={0}_W-m type=NaturalGradientAffineComponent input-dim={1} output-dim={2} bias-stddev=0".format(name, recurrent_projection_dim, non_recurrent_projection_dim))
-    components.append("component name={0}_relu type=RectifiedLinearComponent dim={1} {2}".format(name, non_recurrent_projection_dim, self_repair_string))
-    components.append("component name={0}_renorm type=NormalizeComponent dim={1} target-rms=1.0".format(name, non_recurrent_projection_dim))
+    # components.append("component name={0}_relu type=RectifiedLinearComponent dim={1} {2}".format(name, non_recurrent_projection_dim, self_repair_string))
+    # components.append("component name={0}_renorm type=NormalizeComponent dim={1} target-rms=1.0".format(name, non_recurrent_projection_dim))
 
     component_nodes.append("# h_t and p_t")
     component_nodes.append("component-node name={0}_h_t component={0}_h input=Sum({0}_h1_t, {0}_h2_t)".format(name))
     component_nodes.append("component-node name={0}_p_t component={0}_W-m input={0}_h_t".format(name))
-    component_nodes.append("component-node name={0}_relu component={0}_relu input={0}_p_t".format(name))
-    component_nodes.append("component-node name={0}_renorm component={0}_renorm input={0}_relu".format(name))
+    # component_nodes.append("component-node name={0}_relu component={0}_relu input={0}_p_t".format(name))
+    # component_nodes.append("component-node name={0}_renorm component={0}_renorm input={0}_relu".format(name))
 
-    output_descriptor = '{0}_renorm'.format(name)
+    output_descriptor = '{0}_p_t'.format(name)
     output_dim = non_recurrent_projection_dim
 
     return {
             'descriptor': output_descriptor,
             'dimension':output_dim
             }
-
-

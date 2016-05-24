@@ -61,7 +61,7 @@ stage=0
 nj=6         # This should be set to the maximum number of jobs you are
               # comfortable to run in parallel; you can increase it if your disk
               # speed is greater and you have more machines.
-max_shuffle_jobs_run=6  # the shuffle jobs now include the nnet3-chain-normalize-egs command,
+max_shuffle_jobs_run=12  # the shuffle jobs now include the nnet3-chain-normalize-egs command,
                          # which is fairly CPU intensive, so we can run quite a few at once
                          # without overloading the disks.
 online_ivector_dir=  # can be used if we are including speaker information as iVectors.
@@ -133,9 +133,11 @@ num_lat_jobs=$(cat $latdir/num_jobs) || exit 1;
 frame_shift=$(utils/data/get_frame_shift.sh $data)
 [ ! -f $data/utt2dur ] && utils/data/get_utt2dur.sh $data
 
-cat $data/utt2dur | \
-  awk -v min_len=$frames_per_eg -v fs=$frame_shift '{if ($2 * 1/fs >= min_len) print $1}' | \
-  utils/shuffle_list.pl | head -$num_utts_subset > $dir/valid_uttlist || exit 1;
+if [ $stage -le 0 ]; then
+  cat $data/utt2dur | \
+    awk -v min_len=$frames_per_eg -v fs=$frame_shift '{if ($2 * 1/fs >= min_len) print $1}' | \
+    utils/shuffle_list.pl | head -$num_utts_subset > $dir/valid_uttlist || exit 1;
+fi
 
 len_uttlist=`wc -l $dir/valid_uttlist | awk '{print $1}'`
 if [ $len_uttlist -lt $num_utts_subset ]; then
