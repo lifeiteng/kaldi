@@ -43,6 +43,10 @@ DecodableNnet3SimpleOnline::DecodableNnet3SimpleOnline(
                "Priors in neural network must match with transition model (if exist).");
 
   ComputeSimpleNnetContext(am_nnet_.GetNnet(), &left_context_, &right_context_);
+  left_context_ += opts_.extra_left_context;
+  right_context_ += opts_.extra_right_context;
+  KALDI_LOG << "Left context is " << left_context_;
+  KALDI_LOG << "Right context is " << right_context_;
   log_priors_.ApplyLog();
 }
 
