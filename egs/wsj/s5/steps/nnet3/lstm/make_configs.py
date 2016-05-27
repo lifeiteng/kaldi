@@ -206,7 +206,7 @@ def ParseLstmDelayString(lstm_delay):
 
 def MakeConfigs(config_dir, feat_dim, ivector_dim, num_targets,
                 splice_indexes, lstm_delay, cell_dim,
-                recurrent_projection_dim, non_recurrent_projection_dim,
+                recurrent_projection_dim, non_recurrent_projection_dim, hidden_dim,
                 num_lstm_layers, num_hidden_layers,
                 norm_based_clipping, clipping_threshold,
                 ng_per_element_scale_options, ng_affine_options,
@@ -318,7 +318,7 @@ def Main():
     MakeConfigs(args.config_dir,
                 args.feat_dim, args.ivector_dim, args.num_targets,
                 splice_indexes, args.lstm_delay, args.cell_dim,
-                args.recurrent_projection_dim, args.non_recurrent_projection_dim,
+                args.recurrent_projection_dim, args.non_recurrent_projection_dim, args.hidden_dim,
                 args.num_lstm_layers, num_hidden_layers,
                 args.norm_based_clipping,
                 args.clipping_threshold,
