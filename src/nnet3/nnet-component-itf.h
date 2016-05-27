@@ -454,7 +454,7 @@ class NonlinearComponent: public Component {
 
   virtual int32 InputDim() const { return dim_; }
   virtual int32 OutputDim() const { return dim_; }
-
+  virtual void SetDim(int32 dim) { dim_ = dim; }
   // We implement InitFromConfig at this level.
   // supported config parameters and their defaults:
   //   dim=-1  self-repair-lower-threshold=-1000  self-repair-upper-threshold=-1000

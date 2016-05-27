@@ -153,6 +153,7 @@ class NormalizeComponent: public Component {
   virtual int32 OutputDim() const {
     return (input_dim_ + (add_log_stddev_ ? 1 : 0));
   }
+  virtual void SetDim(int32 dim) { input_dim_ = dim; }
   virtual std::string Info() const;
  private:
   NormalizeComponent &operator = (const NormalizeComponent &other); // Disallow.

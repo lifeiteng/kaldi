@@ -22,6 +22,7 @@
 #include "nnet3/nnet-nnet.h"
 #include "nnet3/nnet-parse.h"
 #include "nnet3/nnet-utils.h"
+#include "nnet3/nnet-simple-component.h"
 
 namespace kaldi {
 namespace nnet3 {
@@ -742,6 +743,281 @@ void Nnet::Check() const {
   KALDI_ASSERT(num_input_nodes > 0);
   KALDI_ASSERT(num_output_nodes > 0);
 }
+
+struct NerualStatsInfo {
+  int32 idx_before;
+  int32 idx_after;
+  Vector<BaseFloat> ionorms;
+  explicit NerualStatsInfo(int32 before, int32 after,
+    const Vector<BaseFloat> norms):
+    idx_before(before), idx_after(after),
+    ionorms(norms) { }
+  std::string Info() {
+    std::ostringstream os;
+    os << "affine before idx is " << idx_before;
+    os << ", affine after idx is " << idx_after;
+    // os << ", ionorms is " << ionorms;
+    return os.str();
+  }
+};
+
+// only TDNN now
+void Nnet::Prune(const NnetNeuralPruneOpts &prune_opts) {
+  int32 num_nodes = nodes_.size(),
+    num_input_nodes = 0,
+    num_output_nodes = 0;
+  KALDI_ASSERT(num_nodes != 0);
+  std::vector<bool> component_used(components_.size());
+
+  {
+    int32 neural_num = 0;
+    std::vector<struct NerualStatsInfo> neural_stats_info;
+    std::vector<std::vector<int32> > neural_prune_idxs;
+
+    for (int32 stage = 0; stage < 2; stage++) {
+      int32 affine_before_idx = -1;
+      AffineComponent *affine_before = NULL;
+      AffineComponent *affine_after = NULL;
+      std::vector<int32> between_components;
+      int32 i = 0;
+      // ComputeStatsInfo(); / DoPruning();
+      for (int32 n = 0; n < num_nodes; n++) {
+        const NetworkNode &node = nodes_[n];
+        std::string node_name = node_names_[n];
+        KALDI_ASSERT(GetNodeIndex(node_name) == n);
+        switch (node.node_type) {
+          case kInput:
+            KALDI_ASSERT(node.dim > 0);
+            num_input_nodes++;
+            break;
+          case kDescriptor: {
+            if (IsOutputNode(n))
+              num_output_nodes++;
+            std::vector<int32> node_deps;
+            node.descriptor.GetNodeDependencies(&node_deps);
+            SortAndUniq(&node_deps);
+            for (size_t i = 0; i < node_deps.size(); i++) {
+              int32 src_node = node_deps[i];
+              KALDI_ASSERT(src_node >= 0 && src_node < num_nodes);
+              NodeType src_type = nodes_[src_node].node_type;
+              if (src_type != kInput && src_type != kDimRange &&
+                  src_type != kComponent)
+                KALDI_ERR << "Invalid source node type in Descriptor: source node "
+                          << node_names_[src_node];
+            }
+            break;
+          }
+          case kComponent: {
+            KALDI_ASSERT(n > 0 && nodes_[n-1].node_type == kDescriptor);
+            const NetworkNode &src_node = nodes_[n-1];
+            Component *c = GetComponent(node.u.component_index);
+            KALDI_LOG << "Component Info: " << c->Info();
+            component_used[node.u.component_index] = true;
+            int32 src_dim = src_node.Dim(*this), input_dim = c->InputDim();
+            if (src_dim != input_dim) {
+              KALDI_ERR << "Dimension mismatch for network-node "
+                        << node_name << ": input-dim "
+                        << src_dim << " versus component-input-dim "
+                        << input_dim;
+            }
+            AffineComponent *affine = dynamic_cast<AffineComponent*>(c);
+            if (affine != NULL) {
+              if (affine_before == NULL) {
+                affine_before = affine;
+                between_components.clear();
+              } else {
+                if (affine_after != NULL)
+                  affine_before = affine_after;
+                affine_after = affine;
+
+                switch (stage) {
+                  case 0: {
+                    neural_num += affine_before->OutputDim();
+                    Vector<BaseFloat> vec(affine_before->OutputDim());
+                    Matrix<BaseFloat>  W_before(affine_before->LinearParams());
+                    W_before.ApplyPowAbs(1.0, false); // abs
+                    vec.AddColSumMat((1.0 - prune_opts.lambda) / W_before.NumCols(), W_before, 0.0);
+
+                    Matrix<BaseFloat>  W_after(affine_after->LinearParams());
+                    W_after.ApplyPowAbs(1.0, false); // abs
+                    KALDI_ASSERT(W_after.NumCols() % W_before.NumRows() == 0);
+                    for (int32 offset = 0; offset < W_after.NumCols(); offset += W_before.NumRows()) {
+                      vec.AddRowSumMat(prune_opts.lambda / W_after.NumRows(), W_after.ColRange(offset, W_before.NumRows()), 1.0); //SumRows
+                    }
+                    // store affine before after index
+                    neural_stats_info.push_back(NerualStatsInfo(affine_before_idx, node.u.component_index, vec));
+                    break;
+                  }
+                  case 1: {
+                    KALDI_LOG << "=========== Pruning... i=" << i << ", affine_before_idx=" << affine_before_idx << ", stat.info="
+                      << neural_stats_info[i].Info();
+                    const NerualStatsInfo &stat = neural_stats_info[i];
+                    const std::vector<int32> &cut_idx = neural_prune_idxs[i];
+                    int32 num_cut = cut_idx.size();
+
+                    KALDI_ASSERT(affine_before_idx == stat.idx_before);
+                    KALDI_ASSERT(node.u.component_index == stat.idx_after);
+
+                    //
+                    AffineComponent* affine_com_before = dynamic_cast<AffineComponent*>(GetComponent(stat.idx_before));
+                    AffineComponent* affine_com_after = dynamic_cast<AffineComponent*>(GetComponent(stat.idx_after));
+                    if (affine_com_before == NULL || affine_com_after == NULL)
+                        KALDI_ERR << "Error stats info.";
+                    // step 1 修改 NonlinearComponents(c)  的维数
+                    for (int32 k = 0; k < between_components.size(); k++) {
+                      int32 cindex = between_components[k];
+                      NonlinearComponent* nonlinear_com = dynamic_cast<NonlinearComponent*>(GetComponent(cindex));
+                      KALDI_LOG << "Component Info: " << GetComponent(cindex)->Info();
+
+                      if (nonlinear_com != NULL) {
+                        int32 dim = nonlinear_com->InputDim();  // InputDim() == OutputDim()
+                        KALDI_ASSERT(nonlinear_com->InputDim() == nonlinear_com->OutputDim());
+                        if (dim - num_cut <= 0) {
+                          KALDI_LOG << "WARNING: cut too many neural nodes at Component: " << cindex << ", maybe you should set percent or threshold smaller.";
+                          continue;
+                        }
+                        nonlinear_com->SetDim(dim - num_cut);
+                        // 
+                        Vector<double> value_sum_cpu(nonlinear_com->ValueSum());
+                        Vector<double> deriv_sum_cpu(nonlinear_com->DerivSum());
+                        for (int32 j = 0; j < cut_idx.size(); ++j) {
+                          int32 idx = cut_idx[j];
+                          value_sum_cpu.RemoveElement(idx - j);
+                          deriv_sum_cpu.RemoveElement(idx - j);
+                        }
+                        CuVector<double> &value_sum = const_cast<CuVector<double> &>(nonlinear_com->ValueSum());
+                        CuVector<double> &deriv_sum = const_cast<CuVector<double> &>(nonlinear_com->DerivSum());
+                        value_sum = value_sum_cpu;
+                        deriv_sum = deriv_sum_cpu;
+                      } else if (GetComponent(cindex)->Type() == "NormalizeComponent") {
+                        NormalizeComponent *comp = dynamic_cast<NormalizeComponent*>(GetComponent(cindex));
+                        comp->SetDim(comp->InputDim() - num_cut);
+                      } else {
+                        KALDI_WARN << "Not NonlinearComponent/NormalizeComponent: " << GetComponent(cindex)->Info();
+                      }
+                    }
+
+                    // step2 修改 c-1 c+1 AffineTransform的 W bias
+                    Vector<BaseFloat> bias_params_before(affine_com_before->BiasParams());
+                    Matrix<BaseFloat> linear_params_before(affine_com_before->LinearParams());
+
+                    const Vector<BaseFloat> bias_params_after(affine_com_after->BiasParams());
+                    Matrix<BaseFloat> linear_params_after(affine_com_after->LinearParams());
+                    int32 offset = linear_params_before.NumRows();
+
+                    for (int32 j = 0; j < cut_idx.size(); ++j) {
+                      int32 idx = cut_idx[j];
+                      bias_params_before.RemoveElement(idx - j);
+                      linear_params_before.RemoveRow(idx - j);
+                    }
+
+                    linear_params_after.Transpose(); // 因为Matrix类没有 RemoveCol()方法，这里做个转置，RemoveRow()
+                    int32 num_cols = linear_params_after.NumRows();
+                    for (int32 k = 0; k < num_cols / offset; k += 1) {
+                      for (int32 j = 0; j < cut_idx.size(); ++j) {
+                        int32 idx = cut_idx[j] + k * (offset - cut_idx.size());
+                        linear_params_after.RemoveRow(idx - j);
+                      }
+                    }
+                    affine_com_before->SetParams(bias_params_before, linear_params_before);
+                    linear_params_after.Transpose(); // 转置回来
+                    affine_com_after->SetParams(bias_params_after, linear_params_after);
+                    break;
+                  }
+                }
+                i++;
+                between_components.clear();
+              }
+              affine_before_idx = node.u.component_index;
+            } else {
+              between_components.push_back(node.u.component_index);
+            }
+            break;
+          }
+          case kDimRange: {
+            int32 input_node = node.u.node_index;
+            KALDI_ASSERT(input_node >= 0 && input_node < num_nodes);
+            NodeType input_type = nodes_[input_node].node_type;
+            if (input_type != kInput && input_type != kComponent)
+              KALDI_ERR << "Invalid source node type in DimRange node: source node "
+                        << node_names_[input_node];
+            int32 input_dim = nodes_[input_node].Dim(*this);
+            if (!(node.dim > 0 && node.dim_offset >= 0 &&
+                  node.dim + node.dim_offset <= input_dim)) {
+              KALDI_ERR << "Invalid node dimensions for DimRange node: " << node_name
+                        << ": input-dim=" << input_dim << ", dim=" << node.dim
+                        << ", dim-offset=" << node.dim_offset;
+            }
+            break;
+          }
+          default:
+            KALDI_ERR << "Invalid node type for node " << node_name;
+        }
+      }
+
+      // LabelToPrunedNodes();
+      BaseFloat thres = 0;
+      if (!prune_opts.per_layer) {
+        if (prune_opts.percent >= 0) {
+          std::vector<BaseFloat> all_value;
+          for (int32 i = 0; i < neural_stats_info.size(); ++i) {
+            BaseFloat* value = neural_stats_info[i].ionorms.Data();
+            BaseFloat  len = neural_stats_info[i].ionorms.Dim();
+            for (int32 j = 0; j < len; ++j) {
+                all_value.push_back(value[j]);
+            }
+          }
+          int32 idx = neural_num * prune_opts.percent;
+          std::nth_element(all_value.begin(), all_value.begin() + idx, all_value.end());
+          thres = *(all_value.begin() + idx);
+        }
+
+        KALDI_ASSERT(thres >= 0);
+
+        for (int32 i = 0; i < neural_stats_info.size(); ++i) {
+          neural_prune_idxs.push_back(std::vector<int32>());
+          BaseFloat* value = neural_stats_info[i].ionorms.Data();
+          int32  len = neural_stats_info[i].ionorms.Dim();
+          // 为防止减去过多node，这里做一个限制，最多减去80%=4/5
+          // sort *value
+          std::sort(value, value + len - 1);
+          BaseFloat thres_cut = std::min(thres, value[len * 4 / 5]);
+          for (int32 j = 0; j < len; ++j) {
+            if (value[j] < thres_cut) {
+              neural_prune_idxs[i].push_back(j);
+            }
+          }
+        }
+      } else { // per_layer == true
+        for (int32 i = 0; i < neural_stats_info.size(); ++i) {
+          if (prune_opts.percent >= 0) {
+            int32 dim = neural_stats_info[i].ionorms.Dim();
+            int32 idx = dim * prune_opts.percent;
+            std::nth_element(neural_stats_info[i].ionorms.Data(), neural_stats_info[i].ionorms.Data() + idx, neural_stats_info[i].ionorms.Data() + dim);
+            thres = *(neural_stats_info[i].ionorms.Data() + idx);
+          }
+          KALDI_ASSERT(thres >= 0);
+
+          neural_prune_idxs.push_back(std::vector<int32>());
+          BaseFloat* value = neural_stats_info[i].ionorms.Data();
+          int32  len = neural_stats_info[i].ionorms.Dim();
+          // 为防止减去过多node，这里做一个限制，最多减去80%=4/5
+          // sort *value
+          std::sort(value, value + len - 1);
+          BaseFloat thres_cut = std::min(thres, value[len * 4 / 5]);
+          for (int32 j = 0; j < len; ++j) {
+            if (value[j] < thres_cut) {
+              neural_prune_idxs[i].push_back(j);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  Check();
+}
+
 
 // copy constructor
 Nnet::Nnet(const Nnet &nnet):
