@@ -199,6 +199,9 @@ def GetArgs():
     # General options
     parser.add_argument("--stage", type=int, default=-4,
                         help="Specifies the stage of the experiment to execution from")
+    parser.add_argument("--start-iter", type=int, dest='start_iter',
+                        default = 0,
+                        help="Start training from iter(for skiping layer-wise discriminative training)")
     parser.add_argument("--exit-stage", type=int, default=None,
                         help="If specified, training exits before running this stage")
     parser.add_argument("--warm-iters", type=int, default=10,
@@ -291,7 +294,7 @@ def ProcessArgs(args):
         run_opts.train_queue_opt = "--gpu 1"
         run_opts.parallel_train_opts = ""
         run_opts.combine_queue_opt = "--gpu 1"
-        run_opts.prior_gpu_opt = "--use-gpu=yes"
+        run_opts.prior_gpu_opt = "--use-gpu=wait"
         run_opts.prior_queue_opt = "--gpu 1"
 
     else:
@@ -414,7 +417,9 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
             cache_write_opt = ""
             gpu_info = ""
             if int(i) >= 0:
-                 gpu_info = " --gpu-id=" + str(i)
+                gpu_info = " --gpu-id=" + str(i)
+            else:
+                gpu_info = "--use-gpu=wait"
             if job == 1:
               # an option for writing cache (storing pairs of nnet-computations and
               # computation-requests) during training.
@@ -665,7 +670,7 @@ def Train(args, run_opts):
 
 
     logger.info("Training will run for {0} epochs = {1} iterations".format(args.num_epochs, num_iters))
-    for iter in range(num_iters):
+    for iter in range(args.start_iter, num_iters):
         if (args.exit_stage is not None) and (iter == args.exit_stage):
             logger.info("Exiting early due to --exit-stage {0}".format(iter))
             return
@@ -702,7 +707,7 @@ def Train(args, run_opts):
                               args.shuffle_buffer_size, run_opts)
             if args.cleanup:
                 # do a clean up everythin but the last 2 models, under certain conditions
-                RemoveModel(args.dir, iter-2, num_iters, num_iters_combine,
+                RemoveModel(args.dir, iter-100, num_iters, num_iters_combine,
                             args.preserve_model_interval)
 
             if args.email is not None:

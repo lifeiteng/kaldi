@@ -15,6 +15,10 @@ fbank_config=conf/fbank.conf
 # is given to the program compute-and-process-kaldi-pitch-feats.
 online_pitch_config=conf/online_pitch.conf
 
+# extra context for (B)LSTM
+extra_left_context=0
+extra_right_context=0
+
 # Below are some options that affect the iVectors, and should probably
 # match those used in extract_ivectors_online.sh.
 num_gselect=5 # Gaussian-selection using diagonal model: number of Gaussians to select
@@ -180,6 +184,9 @@ if $online_cmvn; then
   fi
   echo "--global-cmvn-stats=$dir/conf/global_cmvn.stats" >>$conf
 fi
+
+echo "--extra-left-context=$extra_left_context" >>$conf
+echo "--extra-right-context=$extra_right_context" >>$conf
 
 silphonelist=`cat $lang/phones/silence.csl` || exit 1;
 echo "--endpoint.silence-phones=$silphonelist" >>$conf

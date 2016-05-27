@@ -37,6 +37,7 @@ chunk_right_context=20
 
 # training options
 num_epochs=5
+start_iter=0
 initial_effective_lrate=0.0003
 final_effective_lrate=0.00003
 
@@ -54,7 +55,6 @@ frames_per_chunk=
 
 affix=bidirectional
 use_ivectors=false
-decode_iter=final
 
 shrink=0.99
 max_param_change=2
@@ -67,9 +67,12 @@ ali_dir=exp/tri3_all_ali
 ali_dir=exp/tri2b_all_ali
 common_egs_dir=exp/nnet3/gru-bidirectional-ld0-mpc2/egs
 graph_dir=exp/tri2b/graph_lang_biglm_tg
+lang=$data/lang
 
-decode_sets="non-native forum"
+decode_sets="forum"
 decode_suffix=""
+decode_iter=final
+skip_decode=false
 
 realign_times=""
 
@@ -86,6 +89,8 @@ use_gpu=true
 
 train_set=train
 use_gru_layer=true
+gru_add_rowconv=false
+dir=
 
 # End configuration section.
 
@@ -108,15 +113,17 @@ if [ "$speed_perturb" == "true" ]; then
   suffix=${suffix}_sp
 fi
 
-if $use_gru_layer;then
-  dir=exp/nnet3/gru
-else
-  dir=exp/nnet3/lstm
-fi
+if [ -z $dir ];then
+  if $use_gru_layer;then
+    dir=exp/nnet3/gru
+  else
+    dir=exp/nnet3/lstm
+  fi
 
-dir=$dir${affix:+-$affix}-ld${label_delay}-mpc${max_param_change}${suffix}
-# dir=exp/nnet3/test
-mkdir -p $dir
+  # dir=$dir${affix:+-$affix}-ld${label_delay}-mpc${max_param_change}${suffix}
+  dir=$dir${affix:+-$affix}-ld${label_delay}-clc${chunk_left_context}-crc${chunk_right_context}-mpc${max_param_change}${suffix}
+  mkdir -p $dir/egs
+fi
 
 # make egs dir on /ssd
 if [ $stage -le 5 ]; then
@@ -162,12 +169,12 @@ if $python_train;then
         --num-gru-layers $num_lstm_layers \
         --feat-dir $data/${train_set} \
         --ali-dir $ali_dir \
-        --recurrent-projection-dim 1024 \
-        --non-recurrent-projection-dim 512 \
+        --recurrent-projection-dim $recurrent_projection_dim \
+        --non-recurrent-projection-dim $non_recurrent_projection_dim \
         --hidden-dim $hidden_dim \
         --norm-based-clipping true \
         --label-delay $label_delay \
-        --gru-delay "$gru_delay" \
+        --add-rowconv $gru_add_rowconv \
        $dir/configs || exit 1;
     else
       [ ! -z "$lstm_delay" ] && config_extra_opts+=(--lstm-delay "$lstm_delay")
@@ -192,9 +199,8 @@ if $python_train;then
        /export/b0{3,4,5,6}/$USER/kaldi-data/egs/swbd-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
     fi
 
-    steps/nnet3/train_rnn.py --stage=$train_stage --exit-stage=$exit_stage \
+    steps/nnet3/train_rnn.py --stage=$train_stage --start-iter $start_iter --exit-stage=$exit_stage \
       --cmd="$decode_cmd" \
-      --feat.online-ivector-dir=$ivector_dir \
       --feat.cmvn-opts="$cmvn_opts" \
       --trainer.num-epochs=$num_epochs \
       --trainer.samples-per-iter=$samples_per_iter \
@@ -220,7 +226,7 @@ if $python_train;then
       --sudo-password="496666" \
       --feat-dir=$data/train \
       --ali-dir=$ali_dir \
-      --lang=$data/lang \
+      --lang=$lang \
       --reporting.email="$reporting_email" \
       --dir=$dir  || exit 1;
   fi
@@ -268,6 +274,11 @@ else
   fi
 fi
 
+if $skip_decode;then
+  echo "$0: skip decoding."
+  exit 0
+fi
+
 if [ $stage -le 11 ]; then
   if [ -z $extra_left_context ]; then
     extra_left_context=$chunk_left_context
@@ -289,14 +300,21 @@ if [ $stage -le 11 ]; then
       else
         ivector_opts=
       fi
-      steps/nnet3/lstm/decode.sh --nj 6 --cmd "$decode_cmd" \
+
+      steps/nnet3/decode.sh --nj 6 --cmd "$decode_cmd" \
           $ivector_opts $model_opts \
           --extra-left-context $extra_left_context  \
           --extra-right-context $extra_right_context  \
-          --frames-per-chunk "$frames_per_chunk" \
-         $graph_dir $data/${decode_set} $decode_dir || exit 1;
+          --frames-per-chunk "$frames_per_chunk" --online-cmvn true \
+         $graph_dir $data/${decode_set} ${decode_dir}_online_cmvn || exit 1;
+
+      # steps/nnet3/lstm/decode.sh --nj 6 --cmd "$decode_cmd" \
+      #     $ivector_opts $model_opts \
+      #     --extra-left-context $extra_left_context  \
+      #     --extra-right-context $extra_right_context  \
+      #     --frames-per-chunk "$frames_per_chunk" \
+      #    $graph_dir $data/${decode_set} $decode_dir || exit 1;
   done
-  wait
 fi
 
 bash RESULTS

@@ -4,6 +4,8 @@ stage=1
 # feat_config=" --feature-type mfcc --mfcc-config conf/mfcc_hires.conf "
 feat_config=" --feature-type fbank --fbank-config conf/fbank.conf "
 data=data_fbank
+ctx_opts=
+
 decode_sets="forum non-native"
 decode_iter="final"
 decode_suff=""
@@ -14,6 +16,7 @@ decode_nj=6
 
 chain=false
 
+online_cmvn_opts=""
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
 
@@ -37,7 +40,7 @@ fi
 dir=$1
 
 if [ $stage -le 1 ]; then
-    steps/online/nnet3/prepare_online_decoding.sh --iter $decode_iter $feat_config \
+    steps/online/nnet3/prepare_online_decoding.sh $online_cmvn_opts $ctx_opts --iter $decode_iter $feat_config \
         $data/lang $dir ${dir}_online || exit 1;
 fi
 
