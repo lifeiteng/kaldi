@@ -128,7 +128,7 @@ struct OnlineNnet2FeaturePipelineConfig {
 /// command line, as well as for easiter multithreaded operation.
 struct OnlineNnet2FeaturePipelineInfo {
   OnlineNnet2FeaturePipelineInfo():
-      feature_type("mfcc"), add_pitch(false) { }
+      feature_type("mfcc"), add_pitch(false), use_cmvn(false) { }
 
   OnlineNnet2FeaturePipelineInfo(
       const OnlineNnet2FeaturePipelineConfig &config);
@@ -254,6 +254,7 @@ class OnlineNnet2FeaturePipeline: public OnlineFeatureInterface {
   OnlineProcessPitch *pitch_feature_;  // Processed pitch, if pitch used.
   Matrix<BaseFloat> global_cmvn_stats_;  // Global CMVN stats.
   OnlineCmvn *cmvn_;
+  OnlineFeatureInterface *feature_;        // base_feature_ or cmvn_
 
   // feature_plus_pitch_ is the base_feature_ appended (OnlineAppendFeature)
   /// with pitch_feature_, if used; otherwise, points to the same address as

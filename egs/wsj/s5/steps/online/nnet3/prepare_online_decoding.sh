@@ -32,7 +32,7 @@ max_count=100   # This max-count of 100 can make iVectors more consistent for
 iter=final
 
 online_cmvn=false
-data=
+cmvn_scp=
 # End configuration.
 
 echo "$0 $@"  # Print the command line for logging
@@ -167,14 +167,14 @@ if $add_pitch; then
 fi
 
 if $online_cmvn; then
-  for f in $data/cmvn.scp $srcdir/cmvn_opts; do
+  for f in $cmvn_scp $srcdir/cmvn_opts; do
     [ ! -f $f ] && echo "$0: no such file $f" && exit 1;
   done
-  cat $srcdir/cmvn_opts | sed 's/means/mean/g' $dir/cmvn_opts || exit 1;
+  cat $srcdir/cmvn_opts | sed 's/means/mean/g' | awk '{for(i=1;i<=NF;i++) print $i;}' >$dir/conf/cmvn_opts || exit 1;
   echo "--online-cmvn-config=$dir/conf/cmvn_opts" >>$conf
 
   # create global_cmvn.stats
-  if ! matrix-sum --binary=false --scale=true scp:$data/cmvn.scp $dir/conf/global_cmvn.stats 2>/dev/null; then
+  if ! matrix-sum --binary=false scp:$cmvn_scp $dir/conf/global_cmvn.stats 2>/dev/null; then
     echo "$0: Error summing cmvn stats"
     exit 1
   fi
