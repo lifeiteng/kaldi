@@ -15,6 +15,7 @@ dir=
 treedir=
 lang=
 min_seg_len=
+lats_align_stage=0
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
 
@@ -125,9 +126,9 @@ if [ $stage -le 14 ]; then
   # Get the alignments as lattices (gives the chain training more freedom).
   # use the same num-jobs as the alignments
   nj=$(cat ${ali_dir}/num_jobs) || exit 1;
-  steps/align_fmllr_lats.sh --nj $nj --cmd "$train_cmd" data/$latgen_train_set \
-    data/lang $gmm_dir $lat_dir
-  rm $lat_dir/fsts.*.gz # save space
+  steps/align_fmllr_lats.sh --nj $nj --stage 3 --cmd "$train_cmd" data/$latgen_train_set \
+    data/lang $gmm_dir $lat_dir || exit 1;
+  # rm $lat_dir/fsts.*.gz # save space
 fi
 
 mkdir -p $dir

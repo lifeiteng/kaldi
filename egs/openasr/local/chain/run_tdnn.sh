@@ -50,6 +50,8 @@ gpus="0 1 2"
 splice_indexes="-1,0,1 -1,0,1,2 -3,0,3 -3,0,3 -3,0,3 -6,-3,0 0"
 decode_opts=
 
+online_cmvn=true
+
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
 
@@ -70,7 +72,10 @@ suffix=_sp$suffix
 dir=${dir}${affix:+_$affix}
 dir=${dir}$suffix
 
-treedir=exp/chain/tri3_f_tree$suffix
+mkdir -p $dir/egs
+
+TreeLeaves=4000
+treedir=exp/chain/tri3_f_tree_${TreeLeaves}$suffix
 
 lang=data/lang_chain_f
 max_wer_opt=${max_wer:+" --max-wer $max_wer "}
@@ -81,7 +86,7 @@ if [ $stage -le 0 ]; then
   # utils/copy_data_dir.sh data/openasr-01/train data/openasr-01-train
   # utils/copy_data_dir.sh data/tedlium/train data/tedlium-train
   # utils/copy_data_dir.sh data/voxpop/train data/voxpop-train
-  local/chain/run_chain_common.sh --stage $common_stage \
+  local/chain/run_chain_common.sh --stage $common_stage --min-seg-len 1.55 \
                                   --frames-per-eg $frames_per_eg \
                                   $max_wer_opt \
                                   --dir $dir \
@@ -94,6 +99,13 @@ fi
 #train_data_dir
 #train_ivector_dir
 #lat_dir
+
+# if [ $stage -le 8 ]; then
+#   # Build a tree using our new topology.
+#   steps/nnet3/chain/build_tree.sh --frame-subsampling-factor 3 \
+#       --leftmost-questions-truncate -1 \
+#       --cmd "$train_cmd" $TreeLeaves data_mfcc/train_all $lang exp/tri3_all_ali $treedir || exit 1;
+# fi
 
 if [ $stage -le 9 ]; then
   echo "$0: creating neural net configs";
@@ -152,22 +164,26 @@ if [ $stage -le 10 ]; then
     --dir $dir  || exit 1;
 fi
 
-if [ -z $graph_dir ] && [ $stage -le 18 ]; then
+if [ -z $graph_dir ] && [ $stage -le 11 ]; then
   # Note: it might appear that this $lang directory is mismatched, and it is as
   # far as the 'topo' is concerned, but this script doesn't read the 'topo' from
   # the lang directory.
+  if [ ! -f $dir/final.mdl ]; then
+    cp $dir/$decode_iter.mdl $dir/final.mdl || exit 1;
+  else
+  fi
   utils/mkgraph.sh --self-loop-scale 1.0 --remove-oov data/lang_biglm_tg $dir $dir/graph_tg
   graph_dir=$dir/graph_tg
-  # fstrmsymbols --apply-to-output=true --remove-arcs=true "echo 3|" $graph_dir/HCLG.fst $graph_dir/HCLG.fst
+  fstrmsymbols --apply-to-output=true --remove-arcs=true "echo 3|" $graph_dir/HCLG.fst $graph_dir/HCLG.fst
 fi
 
-if [ $stage -le 19 ]; then
+if [ $stage -le 12 ]; then
   echo "496666" | sudo -S nvidia-smi -c 0
   for decode_set in $decode_sets; do
     steps/nnet3/decode.sh --acwt 1.0 --post-decode-acwt 10.0 $decode_opts  \
         --stage $decode_stage --iter $decode_iter \
         --nj $decode_nj --cmd "$decode_cmd" \
-        --scoring-opts "--min-lmwt 5 " \
+        --scoring-opts "--min-lmwt 5 " --online-cmvn $online_cmvn \
        $graph_dir data/${decode_set}_hires $dir/decode_${decode_iter}_${decode_set}${decode_suffix} || exit 1;
   done
 fi

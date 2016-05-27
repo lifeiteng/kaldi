@@ -180,7 +180,7 @@ if [ $stage -le 19 ]; then
     steps/nnet3/decode.sh --acwt 1.0 --post-decode-acwt 10.0 $decode_opts  \
         --stage $decode_stage --iter $decode_iter \
         --nj $decode_nj --cmd "$decode_cmd" \
-        --scoring-opts "--min-lmwt 5 " \
+        --scoring-opts "--min-lmwt 5 " --online-cmvn true \
        $graph_dir $data/${decode_set} $dir/decode_${decode_iter}_${decode_set}${decode_suffix} || exit 1;
   done
 fi
