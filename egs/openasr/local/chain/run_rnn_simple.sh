@@ -62,10 +62,11 @@ decode_sets="forum non-native"
 decode_suffix=""
 decode_iter=final
 decode_nj=6
+online_cmvn=true
 
 graph_dir=
 dir=
-
+num_nnet=3
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
 
@@ -214,8 +215,8 @@ if [ $stage -le 10 ]; then
     --trainer.max-param-change $max_param_change \
     --trainer.num-epochs $num_epochs \
     --trainer.optimization.shrink-value 0.99 \
-    --trainer.optimization.num-jobs-initial 3 \
-    --trainer.optimization.num-jobs-final 3 \
+    --trainer.optimization.num-jobs-initial $num_nnet \
+    --trainer.optimization.num-jobs-final $num_nnet \
     --trainer.optimization.initial-effective-lrate 0.001 \
     --trainer.optimization.final-effective-lrate 0.0001 \
     --trainer.optimization.momentum 0.0 \
@@ -242,10 +243,13 @@ if $skip_decode;then
   exit 0;
 fi
 
-if [ -z $graph_dir ] && [ $stage -le 18 ]; then
+if [ -z $graph_dir ] && [ $stage -le 11 ]; then
   # Note: it might appear that this $lang directory is mismatched, and it is as
   # far as the 'topo' is concerned, but this script doesn't read the 'topo' from
   # the lang directory.
+  if [ ! -f $dir/final.mdl ];then
+    cp $dir/$exit_stage.mdl $dir/final.mdl || exit 1;
+  fi
   utils/mkgraph.sh --self-loop-scale 1.0 $data/lang_biglm_tg $dir $dir/graph_tg
   graph_dir=$dir/graph_tg
 fi
@@ -261,6 +265,7 @@ if [ $stage -le 11 ]; then
     frames_per_chunk=$chunk_width
   fi
   model_opts=
+  echo "496666" | sudo -S nvidia-smi -c 0
   [ ! -z $decode_iter ] && model_opts=" --iter $decode_iter ";  
   for decode_set in forum non-native native; do
       decode_dir=${dir}/decode_${decode_set}
@@ -274,7 +279,7 @@ if [ $stage -le 11 ]; then
           --extra-left-context $extra_left_context  \
           --extra-right-context $extra_right_context  \
           --frames-per-chunk "$frames_per_chunk" \
-          --scoring-opts "--min-lmwt 5 " \
+          --scoring-opts "--min-lmwt 5 " --online-cmvn $online_cmvn \
           $graph_dir $data/${decode_set} $dir/decode_${decode_iter}_${decode_set}${decode_suffix} || exit 1;
   done
 fi

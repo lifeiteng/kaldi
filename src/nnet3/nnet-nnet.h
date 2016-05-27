@@ -110,7 +110,23 @@ struct NetworkNode {
   // use default assignment operator
 };
 
+struct NnetNeuralPruneOpts {
+  BaseFloat percent; // 0.0 - 1.0
+  BaseFloat threshold; //
 
+  bool per_layer; // cut per layer(when percent >0)
+  BaseFloat lambda; //lambda * onorm + (1-lambda) * inorm
+
+  NnetNeuralPruneOpts(): percent(0.15), threshold(-1.0),
+            per_layer(false), lambda(0.5){ }
+
+  void Register(OptionsItf *po) {
+    po->Register("percent", &percent, "the percent of all nodes to be pruned.");
+    po->Register("threshold", &threshold, "use this threshold value to prune the nodes.");
+    po->Register("per-layer", &per_layer, "when percent>0, pruning per layer.");
+    po->Register("lambda", &lambda, " every node weights is computed by lambda * onorm + (1-lambda) * inorm.");
+  }
+};
 
 class Nnet {
  public:
@@ -203,6 +219,9 @@ class Nnet {
   /// up.  Also make sure no nodes referred to in Descriptors, or in kDimRange,
   /// are themselves Descriptors.
   void Check() const;
+
+  /// Pruning
+  void Prune(const NnetNeuralPruneOpts &prune_opts);
 
   /// returns some human-readable information about the network, mostly for
   /// debugging purposes.

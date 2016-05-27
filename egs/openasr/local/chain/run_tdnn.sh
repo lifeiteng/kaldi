@@ -15,8 +15,6 @@ set -e
 
 # configs for 'chain'
 stage=100
-common_stage=0
-
 train_stage=-10
 get_egs_stage=-10
 decode_stage=1
@@ -28,19 +26,21 @@ common_egs_dir=
 num_epochs=3
 
 # training options
+leftmost_questions_truncate=-1
+numTreeLeaves=5000
+
 frames_per_eg=150
 xent_regularize=0.1
 relu_dim=800
-bottleneck_dim=1024
-cmvn_opts="--norm-means=false --norm-vars=false"
-max_wer=
+bottleneck_dim=2048
 
+train_set=train
 exit_stage=100000
 
 dir=exp/chain/tdnn
 graph_dir=
 
-decode_sets="spontaneous-forum_hires readaloud-non-native_hires readaloud-native_hires"
+decode_sets="forum non-native"
 suffix=
 
 decode_suffix=""
@@ -67,20 +67,24 @@ where "nvcc" is installed.
 EOF
 fi
 
-suffix=_sp$suffix
-
-dir=${dir}${affix:+_$affix}
+dir=$dir${affix:+_$affix}
+# if [ $label_delay -gt 0 ]; then dir=${dir}_ld$label_delay; fi
 dir=${dir}$suffix
+mkdir -p $dir/egs
 
+<<<<<<< HEAD
 mkdir -p $dir/egs
 
 TreeLeaves=4000
 treedir=exp/chain/tri3_f_tree_${TreeLeaves}$suffix
+data=data_fbank_hires
+src_model=exp/tri3
+lats_dir=exp/tri3_all_lats
 
-lang=data/lang_chain_f
-max_wer_opt=${max_wer:+" --max-wer $max_wer "}
-
-chmod -R +x local
+ali_dir=exp/tri3_all_ali
+tree_dir=exp/chain/tri3_tree
+lang=$data/lang_chain
+ivector_dir=""
 
 if [ $stage -le 0 ]; then
   # utils/copy_data_dir.sh data/openasr-01/train data/openasr-01-train
@@ -94,11 +98,25 @@ if [ $stage -le 0 ]; then
                                   --lang $lang || exit 1;
 fi
 
-. $dir/vars
-# sets the directory names where features, ivectors and lattices are stored
-#train_data_dir
-#train_ivector_dir
-#lat_dir
+if [ $stage -le 1 ]; then
+  # Create a version of the lang/ directory that has one state per phone in the
+  # topo file. [note, it really has two states.. the first one is only repeated
+  # once, the second one has zero or more repeats.]
+  rm -rf $lang
+  cp -r data/lang $lang
+  silphonelist=$(cat $lang/phones/silence.csl) || exit 1;
+  nonsilphonelist=$(cat $lang/phones/nonsilence.csl) || exit 1;
+  # Use our special topology... note that later on may have to tune this
+  # topology.
+  steps/nnet3/chain/gen_topo.py $nonsilphonelist $silphonelist >$lang/topo
+fi
+
+if [ $stage -le 2 ]; then
+  # Build a tree using our new topology.
+  steps/nnet3/chain/build_tree.sh --frame-subsampling-factor 3 \
+      --leftmost-questions-truncate $leftmost_questions_truncate \
+      --cmd "$train_cmd" $numTreeLeaves data_mfcc/train_all $lang $ali_dir $tree_dir
+fi
 
 # if [ $stage -le 8 ]; then
 #   # Build a tree using our new topology.
@@ -112,8 +130,8 @@ if [ $stage -le 9 ]; then
 
   steps/nnet3/tdnn/make_configs.py \
     --self-repair-scale 0.00001 \
-    --feat-dir $train_data_dir \
-    --tree-dir $treedir \
+    --feat-dir $data/$train_set \
+    --tree-dir $tree_dir \
     --relu-dim $relu_dim \
     --bottleneck-dim $bottleneck_dim \
     --splice-indexes "$splice_indexes" \
@@ -121,7 +139,7 @@ if [ $stage -le 9 ]; then
     --xent-regularize $xent_regularize \
     --xent-separate-forward-affine true \
     --include-log-softmax false \
-    --final-layer-normalize-target 0.5 \
+    --final-layer-normalize-target 1.0 \
    $dir/configs || exit 1;
 fi
 
@@ -135,7 +153,7 @@ if [ $stage -le 10 ]; then
   # --feat.online-ivector-dir "$ivector_dir" \
   steps/nnet3/chain/train.py --stage $train_stage --exit-stage ${exit_stage} \
     --cmd "$decode_cmd" \
-    --feat.cmvn-opts "$cmvn_opts" \
+    --feat.cmvn-opts "--norm-means=false --norm-vars=false" \
     --chain.xent-regularize $xent_regularize \
     --chain.leaky-hmm-coefficient 0.1 \
     --chain.l2-regularize 0.00005 \
@@ -148,15 +166,15 @@ if [ $stage -le 10 ]; then
     --trainer.num-chunk-per-minibatch 128 \
     --trainer.frames-per-iter 1500000 \
     --trainer.num-epochs $num_epochs \
-    --trainer.optimization.num-jobs-initial 3 \
-    --trainer.optimization.num-jobs-final 3 \
+    --trainer.optimization.num-jobs-initial 2 \
+    --trainer.optimization.num-jobs-final 2 \
     --trainer.optimization.initial-effective-lrate 0.001 \
     --trainer.optimization.final-effective-lrate 0.0001 \
     --trainer.max-param-change 2.0 \
     --cleanup.remove-egs false \
-    --feat-dir $train_data_dir \
-    --tree-dir $treedir \
-    --lat-dir $lat_dir \
+    --feat-dir $data/$train_set \
+    --tree-dir $tree_dir \
+    --lat-dir $lats_dir \
     --use-gpu=true \
     --gpus-wait=true \
     --gpus="$gpus" \
@@ -185,6 +203,7 @@ if [ $stage -le 12 ]; then
         --nj $decode_nj --cmd "$decode_cmd" \
         --scoring-opts "--min-lmwt 5 " --online-cmvn $online_cmvn \
        $graph_dir data/${decode_set}_hires $dir/decode_${decode_iter}_${decode_set}${decode_suffix} || exit 1;
+
   done
 fi
 
