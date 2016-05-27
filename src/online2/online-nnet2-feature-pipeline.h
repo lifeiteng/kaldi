@@ -75,6 +75,9 @@ struct OnlineNnet2FeaturePipelineConfig {
   // compute-and-process-kaldi-pitch-feats.
   std::string online_pitch_config;
   
+  std::string online_cmvn_config;
+  std::string global_cmvn_stats_rxfilename;
+
   // The configuration variables in ivector_extraction_config relate to the
   // iVector extractor and options related to it, see type
   // OnlineIvectorExtractionConfig.
@@ -87,7 +90,6 @@ struct OnlineNnet2FeaturePipelineConfig {
 
   OnlineNnet2FeaturePipelineConfig():
       feature_type("mfcc"), add_pitch(false) { }
-      
 
   void Register(OptionsItf *opts) {
     opts->Register("feature-type", &feature_type,
@@ -103,6 +105,11 @@ struct OnlineNnet2FeaturePipelineConfig {
     opts->Register("online-pitch-config", &online_pitch_config, "Configuration "
                    "file for online pitch features, if --add-pitch=true (e.g. "
                    "conf/online_pitch.conf)");
+    opts->Register("online-cmvn-config", &online_cmvn_config, "Configuration "
+                   "file for online cmvn features, conf/online_cmvn.conf)");
+    opts->Register("global-cmvn-stats", &global_cmvn_stats_rxfilename,
+                   "(Extended) filename for global CMVN stats, e.g. obtained "
+                   "from 'matrix-sum scp:data/train/cmvn.scp -'");
     opts->Register("ivector-extraction-config", &ivector_extraction_config,
                    "Configuration file for online iVector extraction, "
                    "see class OnlineIvectorExtractionConfig in the code");
@@ -121,7 +128,7 @@ struct OnlineNnet2FeaturePipelineConfig {
 /// command line, as well as for easiter multithreaded operation.
 struct OnlineNnet2FeaturePipelineInfo {
   OnlineNnet2FeaturePipelineInfo():
-      feature_type("mfcc"), add_pitch(false) { }
+      feature_type("mfcc"), add_pitch(false), use_cmvn(false) { }
 
   OnlineNnet2FeaturePipelineInfo(
       const OnlineNnet2FeaturePipelineConfig &config);
@@ -140,7 +147,9 @@ struct OnlineNnet2FeaturePipelineInfo {
   PitchExtractionOptions pitch_opts;  // Options for pitch extraction, if done.
   ProcessPitchOptions pitch_process_opts;  // Options for pitch post-processing
 
-
+  bool use_cmvn;
+  OnlineCmvnOptions cmvn_opts;
+  std::string global_cmvn_stats_rxfilename;
   // If the user specified --ivector-extraction-config, we assume we're using
   // iVectors as an extra input to the neural net.  Actually, we don't
   // anticipate running this setup without iVectors.
@@ -193,6 +202,9 @@ class OnlineNnet2FeaturePipeline: public OnlineFeatureInterface {
   virtual int32 NumFramesReady() const;
   virtual void GetFrame(int32 frame, VectorBase<BaseFloat> *feat);
 
+  void SetCmvnState(const OnlineCmvnState &cmvn_state);
+  void GetCmvnState(OnlineCmvnState *cmvn_state);
+
   /// Set the adaptation state to a particular value, e.g. reflecting previous
   /// utterances of the same speaker; this will generally be called after
   /// Copy().
@@ -240,7 +252,9 @@ class OnlineNnet2FeaturePipeline: public OnlineFeatureInterface {
   
   OnlinePitchFeature *pitch_;              // Raw pitch, if used
   OnlineProcessPitch *pitch_feature_;  // Processed pitch, if pitch used.
-
+  Matrix<BaseFloat> global_cmvn_stats_;  // Global CMVN stats.
+  OnlineCmvn *cmvn_;
+  OnlineFeatureInterface *feature_;        // base_feature_ or cmvn_
 
   // feature_plus_pitch_ is the base_feature_ appended (OnlineAppendFeature)
   /// with pitch_feature_, if used; otherwise, points to the same address as
