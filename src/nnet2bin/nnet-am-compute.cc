@@ -122,6 +122,7 @@ int main(int argc, char *argv[]) {
       num_frames += feats.NumRows();
       num_done++;
     }
+
 #if HAVE_CUDA==1
     CuDevice::Instantiate().PrintProfile();
     CuDevice::Instantiate().DeviceReset();

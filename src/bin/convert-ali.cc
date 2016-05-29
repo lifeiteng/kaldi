@@ -41,6 +41,8 @@ int main(int argc, char *argv[]) {
     bool reorder = true;
 
     std::string phone_map_rxfilename;
+    bool ali_to_phone = false;
+    bool sub_one = true;
     ParseOptions po(usage);
     po.Register("phone-map", &phone_map_rxfilename,
                 "File name containing old->new phone mapping (each line is: "
@@ -50,6 +52,8 @@ int main(int argc, char *argv[]) {
                 "versus the way they appear in the HmmTopology object");
     po.Register("frame-subsampling-factor", &frame_subsampling_factor,
                 "Can be used in converting alignments to reduced frame rates.");
+    po.Register("ali-to-phone", &ali_to_phone, "ali to phoneid(0 based if sub_one is true)");
+    po.Register("sub-one", &sub_one, "phoneid - sub_one");
 
     po.Read(argc, argv);
 
@@ -101,7 +105,26 @@ int main(int argc, char *argv[]) {
                            reorder,
                            (phone_map_rxfilename != "" ? &phone_map : NULL),
                            &new_alignment)) {
-        alignment_writer.Write(key, new_alignment);
+        if (ali_to_phone) {         
+          std::vector<std::vector<int32> > split;
+          SplitToPhones(new_trans_model, new_alignment, &split);
+          std::vector<int32> phones;
+          for (size_t i = 0; i < split.size(); i++) {
+            KALDI_ASSERT(!split[i].empty());
+            int32 phone = new_trans_model.TransitionIdToPhone(split[i][0]);
+            int32 num_repeats = split[i].size();
+            //KALDI_ASSERT(num_repeats!=0);
+            for(int32 j = 0; j < num_repeats; j++) {
+              KALDI_ASSERT(phone >= 1);
+              phone = sub_one ? (phone - 1) : phone;
+              phones.push_back(phone);
+            }
+          }
+          KALDI_ASSERT(phones.size() == new_alignment.size());
+          alignment_writer.Write(key, phones);
+        } else {
+          alignment_writer.Write(key, new_alignment);
+        }
         num_success++;
       } else {
         KALDI_WARN << "Could not convert alignment for key " << key
