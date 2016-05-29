@@ -155,10 +155,11 @@ class NormalizeComponent: public Component {
   }
   virtual void SetDim(int32 dim) { input_dim_ = dim; }
   virtual std::string Info() const;
- private:
-  NormalizeComponent &operator = (const NormalizeComponent &other); // Disallow.
   enum { kExpSquaredNormFloor = -66 };
   static const BaseFloat kSquaredNormFloor;
+
+ private:
+  NormalizeComponent &operator = (const NormalizeComponent &other); // Disallow.
   int32 input_dim_;
   BaseFloat target_rms_; // The target rms for outputs.
   // about 0.7e-20.  We need a value that's exactly representable in
@@ -169,6 +170,76 @@ class NormalizeComponent: public Component {
                         // is an extra dimension of the output.
 };
 
+
+class BatchNormalizeComponent: public UpdatableComponent {
+ public:
+ void Init(int32 input_dim, bool train);
+  explicit BatchNormalizeComponent(int32 input_dim, bool train=true) {
+    Init(input_dim, train);
+  }
+  explicit BatchNormalizeComponent(const BatchNormalizeComponent &other);
+  void SetTraining(bool is_training);
+
+  virtual int32 Properties() const {
+    return (kSimpleComponent|kBackpropNeedsInput|kBackpropAdds|
+            kUpdatableComponent|kBackpropInPlace);
+  }
+
+  virtual std::string Type() const { return "BatchNormalizeComponent"; }
+  virtual void InitFromConfig(ConfigLine *cfl);
+  virtual Component* Copy() const { return new BatchNormalizeComponent(*this); }
+  virtual void Propagate(const ComponentPrecomputedIndexes *indexes,
+                         const CuMatrixBase<BaseFloat> &in,
+                         CuMatrixBase<BaseFloat> *out) const;
+  virtual void Backprop(const std::string &debug_info,
+                        const ComponentPrecomputedIndexes *indexes,
+                        const CuMatrixBase<BaseFloat> &in_value,
+                        const CuMatrixBase<BaseFloat> &, // out_value
+                        const CuMatrixBase<BaseFloat> &out_deriv,
+                        Component *to_update,
+                        CuMatrixBase<BaseFloat> *in_deriv) const;
+
+  virtual void Read(std::istream &is, bool binary);
+  virtual void Write(std::ostream &os, bool binary) const;
+  virtual int32 InputDim() const { return gamma_.Dim(); }
+  virtual int32 OutputDim() const { return gamma_.Dim(); }
+  virtual std::string Info() const;
+
+  // Some functions from base-class UpdatableComponent.
+  virtual void Scale(BaseFloat scale);
+  virtual void Add(BaseFloat alpha, const Component &other);
+  virtual void SetZero(bool treat_as_gradient);
+  virtual void PerturbParams(BaseFloat stddev);
+  virtual BaseFloat DotProduct(const UpdatableComponent &other) const;
+  virtual int32 NumParameters() const;
+  virtual void Vectorize(VectorBase<BaseFloat> *params) const;
+  virtual void UnVectorize(const VectorBase<BaseFloat> &params);
+
+  // This new function is used when mixing up:
+  virtual void SetParams(const VectorBase<BaseFloat> &gamma,
+                         const VectorBase<BaseFloat> &beta);
+  const CuVector<BaseFloat> &GammaParams() { return gamma_; }
+  const CuVector<BaseFloat> &BetaParams() { return beta_; }
+
+  void UpdateSimple(const CuMatrixBase<BaseFloat> &in_value,
+                                   const CuMatrixBase<BaseFloat> &out_deriv);
+
+  void RemoveItems(std::vector<int32> items);
+
+ private:
+  BatchNormalizeComponent &operator = (const BatchNormalizeComponent &other); // Disallow.
+  bool training_;
+  static const BaseFloat epsilon_;
+  mutable CuVector<BaseFloat> mean_;
+  mutable CuVector<BaseFloat> variance_;
+
+  mutable int32 num_batch_;
+  mutable CuVector<BaseFloat> means_;
+  mutable CuVector<BaseFloat> variances_;
+
+  CuVector<BaseFloat> gamma_;
+  CuVector<BaseFloat> beta_;
+};
 
 class SigmoidComponent: public NonlinearComponent {
  public:

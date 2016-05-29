@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
     opts.Register(&po);
     
     po.Read(argc, argv);
-    
+
     if (po.NumArgs() != 2) {
       po.PrintUsage();
       exit(1);

@@ -892,6 +892,10 @@ void Nnet::Prune(const NnetNeuralPruneOpts &prune_opts) {
                       } else if (GetComponent(cindex)->Type() == "NormalizeComponent") {
                         NormalizeComponent *comp = dynamic_cast<NormalizeComponent*>(GetComponent(cindex));
                         comp->SetDim(comp->InputDim() - num_cut);
+                      } else if (GetComponent(cindex)->Type() == "BatchNormalizeComponent") {
+                        // NormalizeComponent *comp = dynamic_cast<NormalizeComponent*>(GetComponent(cindex));
+                        // comp->SetDim(comp->InputDim() - num_cut);
+                        KALDI_ERR << "TODO";
                       } else {
                         KALDI_WARN << "Not NonlinearComponent/NormalizeComponent: " << GetComponent(cindex)->Info();
                       }
