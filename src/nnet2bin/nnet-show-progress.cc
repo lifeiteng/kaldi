@@ -154,6 +154,10 @@ int main(int argc, char *argv[]) {
                 << dot_prod;
     }
 
+#if HAVE_CUDA==1
+    CuDevice::Instantiate().DeviceReset();
+#endif
+
     return ret;
   } catch(const std::exception &e) {
     std::cerr << e.what() << '\n';
