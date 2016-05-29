@@ -957,6 +957,9 @@ void Nnet::Prune(const NnetNeuralPruneOpts &prune_opts) {
 
       // LabelToPrunedNodes();
       BaseFloat thres = 0;
+      for (int32 i = 0; i < neural_stats_info.size(); ++i) {
+        KALDI_LOG << i << "-th ionorms " << neural_stats_info[i].ionorms;
+      }
       if (!prune_opts.per_layer) {
         if (prune_opts.percent >= 0) {
           std::vector<BaseFloat> all_value;
