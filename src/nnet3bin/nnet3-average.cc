@@ -103,7 +103,6 @@ int main(int argc, char *argv[]) {
       ReadKaldiObject(po.GetArg(i), &src_nnet);
       AddNnet(src_nnet, model_weights[i - 1], &nnet);
     }
-    
 
     WriteKaldiObject(nnet, nnet_wxfilename, binary_write);
     

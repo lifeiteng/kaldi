@@ -35,6 +35,8 @@ NnetComputeProb::NnetComputeProb(const NnetComputeProbOptions &config,
     bool is_gradient = true;  // force simple update
     SetZero(is_gradient, deriv_nnet_);
   }
+  bool is_training = false;
+  SetTraining(is_training, const_cast<Nnet *>(&nnet_));
 }
 
 const Nnet &NnetComputeProb::GetDeriv() const {

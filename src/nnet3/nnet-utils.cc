@@ -171,6 +171,18 @@ void SetZero(bool is_gradient,
   }
 }
 
+void SetTraining(bool is_training,
+             Nnet *nnet) {
+  for (int32 c = 0; c < nnet->NumComponents(); c++) {
+    Component *comp = nnet->GetComponent(c);
+    if (comp->Type() == "BatchNormalizeComponent") {
+      BatchNormalizeComponent *bn_comp = dynamic_cast<BatchNormalizeComponent*>(comp);
+      KALDI_ASSERT(bn_comp != NULL);
+      bn_comp->SetTraining(is_training);
+    }
+  }
+}
+
 void PerturbParams(BaseFloat stddev,
                    Nnet *nnet) {
   for (int32 c = 0; c < nnet->NumComponents(); c++) {

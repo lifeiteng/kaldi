@@ -58,6 +58,9 @@ int32 NumInputNodes(const Nnet &nnet);
 void SetZero(bool is_gradient,
              Nnet *nnet);
 
+void SetTraining(bool is_training,
+             Nnet *nnet);
+
 /// Calls PerturbParams (with the given stddev) on all updatable components of
 /// the nnet.
 void PerturbParams(BaseFloat stddev,
