@@ -113,10 +113,10 @@ int main(int argc, char *argv[]) {
             KALDI_ASSERT(!split[i].empty());
             int32 phone = new_trans_model.TransitionIdToPhone(split[i][0]);
             int32 num_repeats = split[i].size();
+            KALDI_ASSERT(phone >= 1);
+            phone = sub_one ? (phone - 1) : phone;
             //KALDI_ASSERT(num_repeats!=0);
             for(int32 j = 0; j < num_repeats; j++) {
-              KALDI_ASSERT(phone >= 1);
-              phone = sub_one ? (phone - 1) : phone;
               phones.push_back(phone);
             }
           }

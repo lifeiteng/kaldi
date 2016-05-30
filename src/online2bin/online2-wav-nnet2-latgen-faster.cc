@@ -291,6 +291,7 @@ int main(int argc, char *argv[]) {
 
 #if HAVE_CUDA==1
     CuDevice::Instantiate().PrintProfile();
+    CuDevice::Instantiate().DeviceReset();
 #endif
 
     KALDI_LOG << "Decoded " << num_done << " utterances, "
