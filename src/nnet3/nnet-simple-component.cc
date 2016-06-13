@@ -428,21 +428,23 @@ void NormalizeComponent::Backprop(const std::string &debug_info,
   }
 }
 
-const BaseFloat BatchNormalizeComponent::epsilon_ = 
-    pow(2.0, NormalizeComponent::kExpSquaredNormFloor);
+const BaseFloat BatchNormalizeComponent::epsilon_ = pow(2.0, -8);
 
 void BatchNormalizeComponent::Init(int32 input_dim, bool train) {
   training_ = train;
   gamma_.Resize(input_dim);
-  gamma_.Set(1.0);
+  gamma_.Resize(input_dim, kSetZero);
   beta_.Resize(input_dim, kSetZero);
 
   num_batch_ = 0;
-  means_.SetZero();
-  variances_.SetZero();
+  means_.Resize(input_dim, kSetZero);
+  variances_.Resize(input_dim, kSetZero);
+  mean_.Resize(input_dim, kSetZero);
+  variance_.Resize(input_dim, kSetZero);
 }
 
-BatchNormalizeComponent::BatchNormalizeComponent(const BatchNormalizeComponent &other) {
+BatchNormalizeComponent::BatchNormalizeComponent(const BatchNormalizeComponent &other):
+ UpdatableComponent(other) {
   training_ = other.training_;
   gamma_ = other.gamma_;
   beta_ = other.beta_;
@@ -462,6 +464,7 @@ void BatchNormalizeComponent::InitFromConfig(ConfigLine *cfl) {
       cfl->GetValue("input-dim", &input_dim);
   cfl->GetValue("train", &training);
   cfl->GetValue("training", &training);
+  InitLearningRatesFromConfig(cfl);
   if (!ok || cfl->HasUnusedValues() || input_dim <= 0)
     KALDI_ERR << "Invalid initializer for layer of type "
               << Type() << ": \"" << cfl->WholeLine() << "\"";
@@ -512,7 +515,7 @@ void BatchNormalizeComponent::SetTraining(bool is_training) {
   variance_ = invert_var;
 
   invert_var.Add(epsilon_);
-  invert_var.InvertElements();
+  invert_var.ApplyPow(-0.5);
 
   E_x.MulElements(invert_var);
   E_x.MulElements(gamma_);
@@ -543,14 +546,18 @@ void BatchNormalizeComponent::Propagate(const ComponentPrecomputedIndexes *index
     variance_.Add(epsilon_);
     variance_.ApplyFloor(NormalizeComponent::kSquaredNormFloor);
     variance_.ApplyPow(-0.5);
-    variance_.InvertElements();
 
     // normalize
     out->CopyFromMat(in);
     // sub mean
     out->AddVecToRows(-1.0, mean_, 1.0);
     out->MulColsVec(variance_);
-
+    
+    if (num_batch_ == 1) {
+      gamma_ = variance_;
+      gamma_.InvertElements();
+      beta_ = mean_;
+    }
     // scale and shift
     out->MulColsVec(gamma_);
     out->AddVecToRows(1.0, beta_, 1.0);
@@ -617,20 +624,26 @@ void BatchNormalizeComponent::Read(std::istream &is, bool binary) {
   ExpectOneOrTwoTokens(is, binary, "<BatchNormalizeComponent>", "<LearningRate>");
   ReadBasicType(is, binary, &learning_rate_);
 
+  ExpectToken(is, binary, "<Training>");
+  ReadBasicType(is, binary, &training_);
+
   ExpectToken(is, binary, "<NumBatch>");
   ReadBasicType(is, binary, &num_batch_);
-  ExpectToken(is, binary, "Means");
+  ExpectToken(is, binary, "<Means>");
   means_.Read(is, binary);
-  ExpectToken(is, binary, "Variances");
+  ExpectToken(is, binary, "<Variances>");
   variances_.Read(is, binary);
-  ExpectToken(is, binary, "Gamma");
+  ExpectToken(is, binary, "<Gamma>");
   gamma_.Read(is, binary);
-  ExpectToken(is, binary, "Beta");
+  ExpectToken(is, binary, "<Beta>");
   beta_.Read(is, binary);
 
   ExpectToken(is, binary, "<IsGradient>");
   ReadBasicType(is, binary, &is_gradient_);
   ExpectToken(is, binary, "</BatchNormalizeComponent>");
+
+  mean_.Resize(gamma_.Dim(), kSetZero);
+  variance_.Resize(gamma_.Dim(), kSetZero);
 }
 
 
@@ -638,6 +651,9 @@ void BatchNormalizeComponent::Write(std::ostream &os, bool binary) const {
   WriteToken(os, binary, "<BatchNormalizeComponent>");
   WriteToken(os, binary, "<LearningRate>");
   WriteBasicType(os, binary, learning_rate_);
+
+  WriteToken(os, binary, "<Training>");
+  WriteBasicType(os, binary, training_);
 
   WriteToken(os, binary, "<NumBatch>");
   WriteBasicType(os, binary, num_batch_);

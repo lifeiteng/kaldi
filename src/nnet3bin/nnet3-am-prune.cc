@@ -67,7 +67,9 @@ int main(int argc, char *argv[]) {
       am_nnet.Read(ki.Stream(), binary);
     }
 
+    std::cout << "Before prune, Nnet info: " << am_nnet.GetNnet().Info();
     am_nnet.GetNnet().Prune(prune_opts);
+    std::cout << "After  prune, Nnet info: " << am_nnet.GetNnet().Info();
 
     if (raw) {
       WriteKaldiObject(am_nnet.GetNnet(), nnet_wxfilename, binary_write);

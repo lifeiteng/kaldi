@@ -178,11 +178,13 @@ class BatchNormalizeComponent: public UpdatableComponent {
     Init(input_dim, train);
   }
   explicit BatchNormalizeComponent(const BatchNormalizeComponent &other);
+  BatchNormalizeComponent() : training_(true) { }
+
   void SetTraining(bool is_training);
 
   virtual int32 Properties() const {
     return (kSimpleComponent|kBackpropNeedsInput|kBackpropAdds|
-            kUpdatableComponent|kBackpropInPlace);
+            kUpdatableComponent);
   }
 
   virtual std::string Type() const { return "BatchNormalizeComponent"; }
@@ -237,8 +239,8 @@ class BatchNormalizeComponent: public UpdatableComponent {
   mutable CuVector<BaseFloat> means_;
   mutable CuVector<BaseFloat> variances_;
 
-  CuVector<BaseFloat> gamma_;
-  CuVector<BaseFloat> beta_;
+  mutable CuVector<BaseFloat> gamma_;
+  mutable CuVector<BaseFloat> beta_;
 };
 
 class SigmoidComponent: public NonlinearComponent {

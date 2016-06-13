@@ -773,6 +773,7 @@ void Nnet::Prune(const NnetNeuralPruneOpts &prune_opts) {
     int32 neural_num = 0;
     std::vector<struct NerualStatsInfo> neural_stats_info;
     std::vector<std::vector<int32> > neural_prune_idxs;
+    AffineComponent *Tdnn_pre_final_xent_affine = NULL;
 
     for (int32 stage = 0; stage < 2; stage++) {
       int32 affine_before_idx = -1;
@@ -811,6 +812,7 @@ void Nnet::Prune(const NnetNeuralPruneOpts &prune_opts) {
             KALDI_ASSERT(n > 0 && nodes_[n-1].node_type == kDescriptor);
             const NetworkNode &src_node = nodes_[n-1];
             Component *c = GetComponent(node.u.component_index);
+            KALDI_LOG << "NodeName: " << node_name;
             KALDI_LOG << "Component Info: " << c->Info();
             component_used[node.u.component_index] = true;
             int32 src_dim = src_node.Dim(*this), input_dim = c->InputDim();
@@ -820,7 +822,14 @@ void Nnet::Prune(const NnetNeuralPruneOpts &prune_opts) {
                         << src_dim << " versus component-input-dim "
                         << input_dim;
             }
+            // assume xent_* at the end
             AffineComponent *affine = dynamic_cast<AffineComponent*>(c);
+            if (node_name.find("xent_") != std::string::npos) {
+              if (node_name.find("pre_final_xent_affine") != std::string::npos) {
+                Tdnn_pre_final_xent_affine = affine;
+              }
+              continue;
+            }
             if (affine != NULL) {
               if (affine_before == NULL) {
                 affine_before = affine;
@@ -832,6 +841,7 @@ void Nnet::Prune(const NnetNeuralPruneOpts &prune_opts) {
 
                 switch (stage) {
                   case 0: {
+                    // TODO stats pre_final_xent_affine info
                     neural_num += affine_before->OutputDim();
                     Vector<BaseFloat> vec(affine_before->OutputDim());
                     Matrix<BaseFloat>  W_before(affine_before->LinearParams());
@@ -841,8 +851,9 @@ void Nnet::Prune(const NnetNeuralPruneOpts &prune_opts) {
                     Matrix<BaseFloat>  W_after(affine_after->LinearParams());
                     W_after.ApplyPowAbs(1.0, false); // abs
                     KALDI_ASSERT(W_after.NumCols() % W_before.NumRows() == 0);
+                    BaseFloat times = W_after.NumCols() / W_before.NumRows();
                     for (int32 offset = 0; offset < W_after.NumCols(); offset += W_before.NumRows()) {
-                      vec.AddRowSumMat(prune_opts.lambda / W_after.NumRows(), W_after.ColRange(offset, W_before.NumRows()), 1.0); //SumRows
+                      vec.AddRowSumMat(prune_opts.lambda / (W_after.NumRows() * times), W_after.ColRange(offset, W_before.NumRows()), 1.0); //SumRows
                     }
                     // store affine before after index
                     neural_stats_info.push_back(NerualStatsInfo(affine_before_idx, node.u.component_index, vec));
@@ -926,6 +937,28 @@ void Nnet::Prune(const NnetNeuralPruneOpts &prune_opts) {
                     affine_com_before->SetParams(bias_params_before, linear_params_before);
                     linear_params_after.Transpose(); // 转置回来
                     affine_com_after->SetParams(bias_params_after, linear_params_after);
+
+                    if (Tdnn_pre_final_xent_affine != NULL
+                        && node_name.find("final") != std::string::npos 
+                        && node_name.find("affine") != std::string::npos) {
+                      affine_com_after = Tdnn_pre_final_xent_affine;
+                      const Vector<BaseFloat> bias_params_after(affine_com_after->BiasParams());
+                      Matrix<BaseFloat> linear_params_after(affine_com_after->LinearParams());
+                      int32 offset = linear_params_before.NumRows();
+
+                      linear_params_after.Transpose(); // 因为Matrix类没有 RemoveCol()方法，这里做个转置，RemoveRow()
+                      int32 num_cols = linear_params_after.NumRows();
+                      for (int32 k = 0; k < num_cols / offset; k += 1) {
+                        for (int32 j = 0; j < cut_idx.size(); ++j) {
+                          int32 idx = cut_idx[j] + k * (offset - cut_idx.size());
+                          linear_params_after.RemoveRow(idx - j);
+                        }
+                      }
+                      affine_com_before->SetParams(bias_params_before, linear_params_before);
+                      linear_params_after.Transpose(); // 转置回来
+                      affine_com_after->SetParams(bias_params_after, linear_params_after);
+                    }
+
                     break;
                   }
                 }
