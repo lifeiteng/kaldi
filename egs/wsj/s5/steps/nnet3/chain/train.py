@@ -274,6 +274,18 @@ def GetArgs():
     parser.add_argument("--dir", type=str, required = True,
                         help="Directory to store the models and all other files.")
 
+    parser.add_argument("--pruner.times", type=str, dest='pruner_times',
+                        default=None, action=train_lib.NullstrToNoneAction,
+                        help="""A space seperated string of pruning
+                        times. Values must be between 0 and 1
+                        e.g. '0.1 0.2 0.3' """)
+    parser.add_argument("--pruner.per-layer", type=int, dest='pruner_perlayer',
+                        help="pruner per-layer(first time always pruner per-layer)", default=3)
+    parser.add_argument("--pruner.percent", type=float, default=0.20, dest="pruner_percent",
+                        help="pruner out percent neurals")
+    parser.add_argument("--pruner.lambda", type=float, default=0.5, dest="pruner_lambda",
+                        help="ionorm = lambda * onorm + (1-lambda) * inorm")
+
     print(' '.join(sys.argv))
     print(sys.argv)
 
@@ -435,7 +447,7 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
             processes.extend(gpu_processes)
     train_lib.AllSuccess(dir, iter, processes)
 
-def TrainOneIteration(dir, iter, num_iters, egs_dir,
+def TrainOneIteration(dir, iter, num_iters, pruner_iters, egs_dir,
                       num_jobs, num_archives_processed, num_archives,
                       learning_rate, shrinkage_value, num_chunk_per_minibatch,
                       num_hidden_layers, add_layers_period,
@@ -449,14 +461,13 @@ def TrainOneIteration(dir, iter, num_iters, egs_dir,
     # Use the egs dir from the previous iteration for the diagnostics
     logger.info("Training neural net (pass {0} / {1})".format(iter, num_iters))
     
-    if iter % run_opts.cv_period == 0:
+    if iter % run_opts.cv_period == 0 or iter in pruner_iters:
         chain_lib.ComputeTrainCvProbabilities(dir, iter, egs_dir,
                 l2_regularize, xent_regularize, leaky_hmm_coefficient, run_opts)
         if iter > 0:
             chain_lib.ComputeProgress(dir, iter, run_opts)
 
     if iter > 0 and (iter <= (num_hidden_layers-1) * add_layers_period) and (iter % add_layers_period == 0):
-
         do_average = False # if we've just mixed up, don't do averaging but take the
                            # best.
         cur_num_hidden_layers = 1 + iter / add_layers_period
@@ -658,7 +669,16 @@ def Train(args, run_opts):
                                                                                            num_archives_to_process,
                                                                                            args.initial_effective_lrate,
                                                                                            args.final_effective_lrate)
+    pruner_iters = []
+    if args.pruner_times is not None:
+        pruner_iters = train_lib.GetRealignIters(args.pruner_times,
+                                        num_iters,
+                                        args.num_jobs_initial,
+                                        args.num_jobs_final)
+        logger.info("Prune at iters " + ' '.join([str(v) for v in pruner_iters]))
+        assert(num_iters - num_iters_combine > pruner_iters[-1])
 
+    logger.info("Will keep model from iter {0}".format(num_iters - num_iters_combine + 1))
     logger.info("Training will run for {0} epochs = {1} iterations".format(args.num_epochs, num_iters))
     for iter in range(num_iters):
         if (args.exit_stage is not None) and (iter == args.exit_stage):
@@ -676,9 +696,30 @@ def Train(args, run_opts):
                 shrinkage_value = args.shrink_value if train_lib.DoShrinkage(iter, model_file, args.shrink_nonlinearity, args.shrink_threshold) else 1
             else:
                 shrinkage_value = args.shrink_value
+
+            if iter in pruner_iters:
+                logger.info("Pruning TDNN model")
+                shutil.copy("{dir}/{iter}.mdl".format(dir = args.dir, iter = iter), "{dir}/{iter}.mdl.back".format(dir = args.dir, iter = iter))
+                per_layer = "false"
+                if iter == pruner_iters[0] or iter <= pruner_iters[args.pruner_perlayer - 1]:
+                    per_layer = "true"
+
+                train_lib.RunKaldiCommand("""
+{command} {dir}/log/prune.{iter}.log \
+    nnet3-am-prune {pruner_opts} {dir}/{iter}.mdl {dir}/{iter}.mdl
+                """.format(command = run_opts.command,
+                    pruner_opts = "--percent={0} --per-layer={1} --lambda={2}".format(args.pruner_percent, per_layer, args.pruner_lambda),
+                    dir = args.dir, iter = iter))
+                try:
+                    if os.path.isfile("{dir}/cache.{iter}".format(dir = args.dir, iter = iter)):
+                        os.remove("{dir}/cache.{iter}".format(dir = args.dir, iter = iter))
+                    os.remove("{dir}/cache.{iter}".format(dir = args.dir, iter = iter + 1))
+                except:
+                    pass
+
             logger.info("On iteration {0}, learning rate is {1} and shrink value is {2}.".format(iter, learning_rate(iter, current_num_jobs, num_archives_processed), shrinkage_value))
 
-            TrainOneIteration(args.dir, iter, num_iters, egs_dir, current_num_jobs,
+            TrainOneIteration(args.dir, iter, num_iters, pruner_iters, egs_dir, current_num_jobs,
                               num_archives_processed, num_archives,
                               learning_rate(iter, current_num_jobs, num_archives_processed),
                               shrinkage_value,

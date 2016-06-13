@@ -69,6 +69,8 @@ cmvn_opts=  # can be used for specifying CMVN options, if feature type is not ld
             # it doesn't make sense to use different options than were used as input to the
             # LDA transform).  This is used to turn off CMVN in the online-nnet experiments.
 
+shuffle_job_begin=1
+
 echo "$0 $@"  # Print the command line for logging
 
 if [ -f path.sh ]; then . ./path.sh; fi
@@ -144,7 +146,7 @@ if [ $len_uttlist -lt $num_utts_subset ]; then
   echo "Number of utterances which have length at least $frames_per_eg is really low. Please check your data." && exit 1;
 fi
 
-if [ -f $data/utt2uniq ]; then  # this matters if you use data augmentation.
+if [ $stage -le 0 ] && [ -f $data/utt2uniq ]; then  # this matters if you use data augmentation.
   # because of this stage we can again have utts with lengths less than
   # frames_per_eg
   echo "File $data/utt2uniq exists, so augmenting valid_uttlist to"
@@ -155,12 +157,13 @@ if [ -f $data/utt2uniq ]; then  # this matters if you use data augmentation.
     sort | uniq | utils/apply_map.pl $dir/uniq2utt | \
     awk '{for(n=1;n<=NF;n++) print $n;}' | sort  > $dir/valid_uttlist
   rm $dir/uniq2utt $dir/valid_uttlist.tmp
+
+  cat $data/utt2dur | \
+    awk -v min_len=$frames_per_eg -v fs=$frame_shift '{if ($2 * 1/fs >= min_len) print $1}' | \
+     utils/filter_scp.pl --exclude $dir/valid_uttlist | \
+     utils/shuffle_list.pl | head -$num_utts_subset > $dir/train_subset_uttlist || exit 1;
 fi
 
-cat $data/utt2dur | \
-  awk -v min_len=$frames_per_eg -v fs=$frame_shift '{if ($2 * 1/fs >= min_len) print $1}' | \
-   utils/filter_scp.pl --exclude $dir/valid_uttlist | \
-   utils/shuffle_list.pl | head -$num_utts_subset > $dir/train_subset_uttlist || exit 1;
 len_uttlist=`wc -l $dir/train_subset_uttlist | awk '{print $1}'`
 if [ $len_uttlist -lt $num_utts_subset ]; then
   echo "Number of utterances which have length at least $frames_per_eg is really low. Please check your data." && exit 1;
@@ -184,8 +187,6 @@ if [ -f $transform_dir/raw_trans.1 ] && [ $feat_type == "raw" ]; then
       copy-feats "ark:cat $transform_dir/raw_trans.* |" "ark,scp:$dir/trans.ark,$dir/trans.scp"
   fi
 fi
-
-
 
 ## Set up features.
 echo "$0: feature type is $feat_type"
@@ -250,6 +251,7 @@ num_archives=$[$num_frames/$frames_per_iter+1]
 max_open_filehandles=$(ulimit -n) || exit 1
 num_archives_intermediate=$num_archives
 archives_multiple=1
+
 while [ $[$num_archives_intermediate+4] -gt $max_open_filehandles ]; do
   archives_multiple=$[$archives_multiple+1]
   num_archives_intermediate=$[$num_archives/$archives_multiple] || exit 1;
@@ -413,7 +415,7 @@ if [ $stage -le 5 ]; then
         ln -sf cegs.$archive_index.ark $dir/cegs.$x.$y.ark || exit 1
       done
     done
-    $cmd --max-jobs-run $max_shuffle_jobs_run --mem 8G JOB=1:$num_archives_intermediate $dir/log/shuffle.JOB.log \
+    $cmd --max-jobs-run $max_shuffle_jobs_run --mem 8G JOB=$shuffle_job_begin:$num_archives_intermediate $dir/log/shuffle.JOB.log \
       nnet3-chain-normalize-egs $chaindir/normalization.fst "ark:cat $egs_list|" ark:- \| \
       nnet3-chain-shuffle-egs --srand=JOB ark:- ark:- \| \
       nnet3-chain-copy-egs ark:- $output_archives || exit 1;

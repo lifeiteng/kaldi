@@ -6,10 +6,12 @@ feat_config=" --feature-type fbank --fbank-config conf/fbank.conf "
 data=data_fbank
 ctx_opts=
 
-decode_sets="forum non-native"
+decode_sets="forum non-native native"
 decode_iter="final"
 decode_suff=""
+
 decode_opts=""
+scoring_opts=""
 
 graph_dir=exp/tri2b/graph_lang_biglm_tg
 decode_nj=6
@@ -55,7 +57,7 @@ if [ $stage -le 2 ]; then
     fi
 
     for decode_set in $decode_sets; do
-        steps/online/nnet3/decode.sh $decode_opts \
+        steps/online/nnet3/decode.sh $decode_opts --scoring-opts "$scoring_opts" \
             --nj $decode_nj --cmd "$decode_cmd" $iter_opts --config conf/decode_online.config \
             $graph_dir $data/${decode_set} ${dir}_online/decode_${decode_iter}_${decode_set}${decode_suff} || exit 1;
 

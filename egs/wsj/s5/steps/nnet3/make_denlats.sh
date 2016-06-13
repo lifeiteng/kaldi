@@ -175,21 +175,24 @@ if $determinize; then
   lattice_determinize_cmd="lattice-determinize-non-compact --acoustic-scale=$acwt --max-mem=$max_mem --minimize=$minimize --prune --beam=$beam ark:- ark:- |"
 fi
 
-if [ $sub_split -eq 1 ]; then 
-  $cmd --num-threads $num_threads JOB=1:$nj $dir/log/decode_den.JOB.log \
-    nnet3-latgen-faster$thread_string $ivector_opts $frame_subsampling_opt \
-    --frames-per-chunk=$frames_per_chunk \
-    --extra-left-context=$extra_left_context \
-    --extra-right-context=$extra_right_context \
-    --extra-left-context-initial=$extra_left_context_initial \
-    --extra-right-context-final=$extra_right_context_final \
-    --minimize=false --determinize-lattice=false \
-    --word-determinize=false --phone-determinize=false \
-    --max-active=$max_active --min-active=$min_active --beam=$beam \
-    --lattice-beam=$lattice_beam --acoustic-scale=$acwt --allow-partial=false \
-    --max-mem=$max_mem --word-symbol-table=$lang/words.txt $srcdir/final.mdl  \
-    $dir/dengraph/HCLG.fst "$feats" \
-    "ark:|$lattice_determinize_cmd gzip -c >$dir/lat.JOB.gz" || exit 1
+if [ $sub_split -eq 1 ]; then
+  for n in $(seq $nj);do
+    $cmd --num-threads $num_threads JOB=$n:$n $dir/log/decode_den.JOB.log \
+      nnet3-latgen-faster$thread_string $ivector_opts $frame_subsampling_opt \
+      --frames-per-chunk=$frames_per_chunk \
+      --extra-left-context=$extra_left_context \
+      --extra-right-context=$extra_right_context \
+      --extra-left-context-initial=$extra_left_context_initial \
+      --extra-right-context-final=$extra_right_context_final \
+      --minimize=false --determinize-lattice=false \
+      --word-determinize=false --phone-determinize=false \
+      --max-active=$max_active --min-active=$min_active --beam=$beam \
+      --lattice-beam=$lattice_beam --acoustic-scale=$acwt --allow-partial=false \
+      --max-mem=$max_mem --word-symbol-table=$lang/words.txt $srcdir/final.mdl  \
+      $dir/dengraph/HCLG.fst "$feats" \
+      "ark:|$lattice_determinize_cmd gzip -c >$dir/lat.JOB.gz" || exit 1 &
+    sleep 5
+  done
 else
 
   # each job from 1 to $nj is split into multiple pieces (sub-split), and we aim

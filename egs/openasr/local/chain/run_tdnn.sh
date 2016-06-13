@@ -17,13 +17,19 @@ set -e
 stage=100
 train_stage=-10
 get_egs_stage=-10
-decode_stage=1
+common_stage=
+
+decode_stage=0
+
 
 affix=
 common_egs_dir=
 
 # label_delay=0
 num_epochs=3
+pruner_times=
+pruner_perlayer=3
+pruner_lambda=1
 
 # training options
 leftmost_questions_truncate=-1
@@ -32,25 +38,31 @@ numTreeLeaves=5000
 frames_per_eg=150
 xent_regularize=0.1
 relu_dim=800
-bottleneck_dim=2048
+bottleneck_dim=
+initial_effective_lrate=0.001
+final_effective_lrate=0.0001
+
+cmvn_opts="--norm-means=true --norm-vars=true"
 
 train_set=train
-exit_stage=100000
+exit_stage=
 
 dir=exp/chain/tdnn
 graph_dir=
 
-decode_sets="forum non-native"
+decode_sets="forum non-native native"
 suffix=
 
 decode_suffix=""
-decode_nj=6
+decode_nj=12
 decode_iter="final"
 gpus="0 1 2"
 splice_indexes="-1,0,1 -1,0,1,2 -3,0,3 -3,0,3 -3,0,3 -6,-3,0 0"
 decode_opts=
 
 online_cmvn=true
+skip_decode=true
+egs_opts=
 
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
@@ -72,11 +84,10 @@ dir=$dir${affix:+_$affix}
 dir=${dir}$suffix
 mkdir -p $dir/egs
 
-<<<<<<< HEAD
 mkdir -p $dir/egs
 
 TreeLeaves=4000
-treedir=exp/chain/tri3_f_tree_${TreeLeaves}$suffix
+# treedir=exp/chain/tri3_f_tree_${TreeLeaves}$suffix
 data=data_fbank_hires
 src_model=exp/tri3
 lats_dir=exp/tri3_all_lats
@@ -111,12 +122,12 @@ if [ $stage -le 1 ]; then
   steps/nnet3/chain/gen_topo.py $nonsilphonelist $silphonelist >$lang/topo
 fi
 
-if [ $stage -le 2 ]; then
-  # Build a tree using our new topology.
-  steps/nnet3/chain/build_tree.sh --frame-subsampling-factor 3 \
-      --leftmost-questions-truncate $leftmost_questions_truncate \
-      --cmd "$train_cmd" $numTreeLeaves data_mfcc/train_all $lang $ali_dir $tree_dir
-fi
+# if [ $stage -le 2 ]; then
+#   # Build a tree using our new topology.
+#   steps/nnet3/chain/build_tree.sh --frame-subsampling-factor 3 \
+#       --leftmost-questions-truncate $leftmost_questions_truncate \
+#       --cmd "$train_cmd" $numTreeLeaves data_mfcc/train_all $lang $ali_dir $tree_dir
+# fi
 
 # if [ $stage -le 8 ]; then
 #   # Build a tree using our new topology.
@@ -125,21 +136,23 @@ fi
 #       --cmd "$train_cmd" $TreeLeaves data_mfcc/train_all $lang exp/tri3_all_ali $treedir || exit 1;
 # fi
 
+. $dir/vars || exit 1;
+
 if [ $stage -le 9 ]; then
   echo "$0: creating neural net configs";
-
+  bottleneck_dim_opts=""
+  [ ! -z $bottleneck_dim ] && bottleneck_dim_opts="--bottleneck-dim $bottleneck_dim"
   steps/nnet3/tdnn/make_configs.py \
     --self-repair-scale 0.00001 \
-    --feat-dir $data/$train_set \
+    --feat-dir $train_data_dir \
     --tree-dir $tree_dir \
-    --relu-dim $relu_dim \
-    --bottleneck-dim $bottleneck_dim \
+    --relu-dim $relu_dim $bottleneck_dim_opts \
     --splice-indexes "$splice_indexes" \
     --use-presoftmax-prior-scale false \
     --xent-regularize $xent_regularize \
     --xent-separate-forward-affine true \
     --include-log-softmax false \
-    --final-layer-normalize-target 1.0 \
+    --final-layer-normalize-target 0.5 \
    $dir/configs || exit 1;
 fi
 
@@ -151,9 +164,11 @@ if [ $stage -le 10 ]; then
   touch $dir/egs/.nodelete # keep egs around when that run dies.
 
   # --feat.online-ivector-dir "$ivector_dir" \
-  steps/nnet3/chain/train.py --stage $train_stage --exit-stage ${exit_stage} \
+  exit_stage_opts=""
+  [ ! -z $exit_stage ] && exit_stage_opts="--exit-stage $exit_stage"
+  steps/nnet3/chain/train.py --stage $train_stage $exit_stage_opts \
     --cmd "$decode_cmd" \
-    --feat.cmvn-opts "--norm-means=false --norm-vars=false" \
+    --feat.cmvn-opts "$cmvn_opts" \
     --chain.xent-regularize $xent_regularize \
     --chain.leaky-hmm-coefficient 0.1 \
     --chain.l2-regularize 0.00005 \
@@ -161,26 +176,31 @@ if [ $stage -le 10 ]; then
     --chain.lm-opts="--num-extra-lm-states=2000" \
     --egs.dir "$common_egs_dir" \
     --egs.stage $get_egs_stage \
-    --egs.opts "--frames-overlap-per-eg 0" \
+    --egs.opts "--frames-overlap-per-eg 0 $egs_opts " \
     --egs.chunk-width $frames_per_eg \
     --trainer.num-chunk-per-minibatch 128 \
     --trainer.frames-per-iter 1500000 \
     --trainer.num-epochs $num_epochs \
-    --trainer.optimization.num-jobs-initial 2 \
-    --trainer.optimization.num-jobs-final 2 \
-    --trainer.optimization.initial-effective-lrate 0.001 \
-    --trainer.optimization.final-effective-lrate 0.0001 \
+    --trainer.optimization.num-jobs-initial 3 \
+    --trainer.optimization.num-jobs-final 3 \
+    --trainer.optimization.initial-effective-lrate $initial_effective_lrate \
+    --trainer.optimization.final-effective-lrate $final_effective_lrate \
     --trainer.max-param-change 2.0 \
+    --pruner.times "$pruner_times" \
+    --pruner.per-layer $pruner_perlayer \
+    --pruner.lambda $pruner_lambda \
     --cleanup.remove-egs false \
-    --feat-dir $data/$train_set \
+    --feat-dir $train_data_dir \
     --tree-dir $tree_dir \
-    --lat-dir $lats_dir \
+    --lat-dir $lat_dir \
     --use-gpu=true \
     --gpus-wait=true \
     --gpus="$gpus" \
     --sudo-password "496666" \
     --dir $dir  || exit 1;
 fi
+
+$skip_decode && exit 0;
 
 if [ -z $graph_dir ] && [ $stage -le 11 ]; then
   # Note: it might appear that this $lang directory is mismatched, and it is as

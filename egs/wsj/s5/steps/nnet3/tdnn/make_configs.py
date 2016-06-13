@@ -121,6 +121,10 @@ def GetArgs():
                         help="Directory to write config files and variables")
     parser.add_argument("--bottleneck-dim", type=int,
                         help="bottleneck dim", default = 0)
+    parser.add_argument("--batch-normalize", type=str, action=nnet3_train_lib.StrToBoolAction,
+                        help="If \"true\" an LDA matrix computed from the input features "
+                        "use batch normalize before nonlinearity(only config ReLU now).",
+                        default=False, choices = ["false", "true"])
 
     print(' '.join(sys.argv))
 
@@ -420,7 +424,8 @@ def MakeConfigs(config_dir, splice_indexes_string,
                 xent_regularize,
                 xent_separate_forward_affine,
                 self_repair_scale,
-                objective_type):
+                objective_type,
+                batch_normalize):
 
     parsed_splice_output = ParseSpliceString(splice_indexes_string.strip())
 
@@ -542,7 +547,8 @@ def MakeConfigs(config_dir, splice_indexes_string,
             prev_layer_output_chain = nodes.AddAffRelNormLayer(config_lines, "Tdnn_pre_final_chain",
                                                     prev_layer_output, final_nonlin_output_dim,
                                                     self_repair_scale = self_repair_scale,
-                                                    norm_target_rms = final_layer_normalize_target)
+                                                    norm_target_rms = final_layer_normalize_target,
+                                                    batch_normalize = batch_normalize)
 
 
             nodes.AddFinalLayer(config_lines, prev_layer_output_chain, num_targets,
@@ -570,7 +576,8 @@ def MakeConfigs(config_dir, splice_indexes_string,
             prev_layer_output = nodes.AddAffRelNormLayer(config_lines, "Tdnn_{0}".format(i),
                                                         prev_layer_output, local_nonlin_output_dim,
                                                         self_repair_scale = self_repair_scale,
-                                                        norm_target_rms = 1.0 if i < num_hidden_layers -1 else final_layer_normalize_target)
+                                                        norm_target_rms = 1.0 if i < num_hidden_layers -1 else final_layer_normalize_target,
+                                                        batch_normalize = batch_normalize)
 
             # a final layer is added after each new layer as we are generating
             # configs for layer-wise discriminative training
@@ -642,7 +649,8 @@ def Main():
                 xent_regularize = args.xent_regularize,
                 xent_separate_forward_affine = args.xent_separate_forward_affine,
                 self_repair_scale = args.self_repair_scale,
-                objective_type = args.objective_type)
+                objective_type = args.objective_type,
+                batch_normalize = args.batch_normalize)
 
 if __name__ == "__main__":
     Main()

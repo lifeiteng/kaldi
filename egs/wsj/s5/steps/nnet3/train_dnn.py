@@ -89,7 +89,7 @@ def GetArgs():
                         "preconditioning method, 2 samples in the same minibatch"
                         "can affect each others' gradients.")
     parser.add_argument("--trainer.add-layers-period", type=int, dest='add_layers_period',
-                        default=2,
+                        default=5,
                         help="The number of iterations between adding layers"
                         "during layer-wise discriminative training.")
     parser.add_argument("--trainer.max-param-change", type=float, dest='max_param_change',
@@ -211,6 +211,17 @@ def GetArgs():
                         help="Wait all gpus jobs finish", default=True)
     parser.add_argument("--cv-period", type=int, default=10,
                         help="Run Cv every period iter")
+    parser.add_argument("--pruner.times", type=str, dest='pruner_times',
+                        default=None, action=NullstrToNoneAction,
+                        help="""A space seperated string of pruning
+                        times. Values must be between 0 and 1
+                        e.g. '0.1 0.2 0.3' """)
+    parser.add_argument("--pruner.per-layer", type=int, dest='pruner_perlayer',
+                        help="pruner per-layer(first time always pruner per-layer)", default=2)
+    parser.add_argument("--pruner.percent", type=float, default=0.15, dest="pruner_percent",
+                        help="pruner out percent neurals")
+    parser.add_argument("--pruner.lambda", type=float, default=0.5, dest="pruner_lambda",
+                        help="ionorm = lambda * onorm + (1-lambda) * inorm")
 
     print(' '.join(sys.argv))
 
@@ -376,14 +387,14 @@ def TrainOneIteration(dir, iter, egs_dir,
                       frames_per_eg, num_hidden_layers, add_layers_period,
                       left_context, right_context,
                       momentum, max_param_change, shuffle_buffer_size,
-                      run_opts):
+                      run_opts, pruner_iters):
 
 
 
     # Set off jobs doing some diagnostics, in the background.
     # Use the egs dir from the previous iteration for the diagnostics
 
-    if iter % run_opts.cv_period == 0:
+    if iter % run_opts.cv_period == 0 or iter in pruner_iters:
         ComputeTrainCvProbabilities(dir, iter, egs_dir, run_opts)
         if iter > 0:
             ComputeProgress(dir, iter, egs_dir, run_opts)
@@ -580,6 +591,14 @@ def Train(args, run_opts):
                                         args.num_jobs_initial,
                                         args.num_jobs_final)
         print(realign_iters)
+    pruner_iters = []
+    if args.pruner_times is not None:
+        pruner_iters = GetRealignIters(args.pruner_times,
+                                        num_iters,
+                                        args.num_jobs_initial,
+                                        args.num_jobs_final)
+        logger.info("Prune at iters " + ' '.join([str(v) for v in pruner_iters]))
+        assert(num_iters - num_iters_combine > pruner_iters[-1])
     # egs_dir will be updated if there is realignment
     cur_egs_dir=egs_dir
     logger.info("Will keep model from iter {0}".format(num_iters - num_iters_combine + 1))
@@ -606,8 +625,25 @@ def Train(args, run_opts):
                         transform_dir = args.transform_dir, online_ivector_dir = args.online_ivector_dir)
                 if args.cleanup and args.egs_dir is None:
                     RemoveEgs(prev_egs_dir)
-            model_file = "{dir}/{iter}.mdl".format(dir = args.dir, iter = iter)
 
+            if iter in pruner_iters:
+                logger.info("Pruning TDNN model")
+                shutil.copy("{dir}/{iter}.mdl".format(dir = args.dir, iter = iter), "{dir}/{iter}.mdl.back".format(dir = args.dir, iter = iter))
+                per_layer = "false"
+                if iter == pruner_iters[0] or iter <= pruner_iters[args.pruner_perlayer - 1]:
+                    per_layer = "true"
+
+                RunKaldiCommand("""
+{command} {dir}/log/prune.{iter}.log \
+    nnet3-am-prune {pruner_opts} {dir}/{iter}.mdl {dir}/{iter}.mdl
+                """.format(command = run_opts.command,
+                    pruner_opts = "--percent={0} --per-layer={1} --lambda={2}".format(args.pruner_percent, per_layer, args.pruner_lambda),
+                    dir = args.dir, iter = iter))
+                try:
+                    os.remove("{dir}/cache.{iter}".format(dir = args.dir, iter = iter))
+                    os.remove("{dir}/cache.{iter}".format(dir = args.dir, iter = iter + 1))
+                except:
+                    pass
             logger.info("On iteration {0}, learning rate is {1}.".format(iter, learning_rate(iter, current_num_jobs, num_archives_processed)))
             logger.info("Training neural net (pass {0} / {1})".format(iter, num_iters))
 
@@ -618,10 +654,10 @@ def Train(args, run_opts):
                               num_hidden_layers, args.add_layers_period,
                               left_context, right_context,
                               args.momentum, args.max_param_change,
-                              args.shuffle_buffer_size, run_opts)
+                              args.shuffle_buffer_size, run_opts, pruner_iters)
             if args.cleanup:
                 # do a clean up everythin but the last 2 models, under certain conditions
-                RemoveModel(args.dir, iter-2, num_iters, num_iters_combine,
+                RemoveModel(args.dir, iter-99, num_iters, num_iters_combine,
                             args.preserve_model_interval)
 
             if args.email is not None:
@@ -637,6 +673,9 @@ def Train(args, run_opts):
 
     if args.stage <= num_iters:
         logger.info("Doing final combination to produce final.mdl")
+        if len(pruner_iters) > 0 and pruner_iters[-1] > num_iters_combine:
+            num_iters_combine = pruner_iters[-1] + 100
+
         CombineModels(args.dir, num_iters, num_iters_combine, egs_dir, run_opts)
 
     if args.stage <= num_iters + 1:
