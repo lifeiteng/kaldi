@@ -120,7 +120,12 @@ int main(int argc, char *argv[]) {
       trans_model.Write(ko.Stream(), binary_write);
       am_nnet1.Write(ko.Stream(), binary_write);
     }
-    
+
+#if HAVE_CUDA==1
+    if (combine_config.num_threads == 1)
+      CuDevice::Instantiate().DeviceReset();
+#endif
+
     KALDI_LOG << "Finished combining neural nets, wrote model to "
               << nnet_wxfilename;
     return (validation_set.size() == 0 ? 1 : 0);

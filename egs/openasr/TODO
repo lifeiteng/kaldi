@@ -10,3 +10,12 @@ egs/ami/s5/local/sort_bad_utts.py
 扩展词典/概率词典？ 参考 wsj/s5/run.sh
 
 
+Exp
+[Conv] + (B)LSTM/GRU + [RowConv] + [DNN]
+
+Chain/HMM
+3下采样具体实现方式->指导参数设置
+
+# 实习生项目
+char-level CTC+RnnLM
+

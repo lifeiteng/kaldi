@@ -185,6 +185,7 @@ int main(int argc, char *argv[]) {
 
 #if HAVE_CUDA==1
     CuDevice::Instantiate().PrintProfile();
+    CuDevice::Instantiate().DeviceReset();
 #endif
 
     double elapsed = timer.Elapsed();
