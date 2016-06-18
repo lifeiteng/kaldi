@@ -91,6 +91,8 @@ Component* Component::NewComponentOfType(const std::string &component_type) {
     ans = new RectifiedLinearComponent();
   } else if (component_type == "NormalizeComponent") {
     ans = new NormalizeComponent();
+  } else if (component_type == "BatchNormalizeComponent") {
+    ans = new BatchNormalizeComponent();
   } else if (component_type == "PnormComponent") {
     ans = new PnormComponent();
   } else if (component_type == "SumReduceComponent") {

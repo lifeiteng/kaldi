@@ -100,21 +100,33 @@ def AddAffineLayer(config_lines, name, input, output_dim, ng_affine_options = ""
     return {'descriptor':  '{0}_affine'.format(name),
             'dimension': output_dim}
 
-def AddAffRelNormLayer(config_lines, name, input, output_dim, ng_affine_options = " bias-stddev=0 ", norm_target_rms = 1.0, self_repair_scale = None):
+def AddAffRelNormLayer(config_lines, name, input, output_dim, ng_affine_options = " bias-stddev=0 ", norm_target_rms = 1.0, self_repair_scale = None, batch_normalize = False):
     components = config_lines['components']
     component_nodes = config_lines['component-nodes']
 
     self_repair_string = "self-repair-scale={0:.10f}".format(self_repair_scale) if self_repair_scale is not None else ''
     components.append("component name={0}_affine type=NaturalGradientAffineComponent input-dim={1} output-dim={2} {3}".format(name, input['dimension'], output_dim, ng_affine_options))
-    components.append("component name={0}_relu type=RectifiedLinearComponent dim={1} {2}".format(name, output_dim, self_repair_string))
-    components.append("component name={0}_renorm type=NormalizeComponent dim={1} target-rms={2}".format(name, output_dim, norm_target_rms))
+    
+    if batch_normalize:
+        components.append("component name={0}_bnnorm type=BatchNormalizeComponent dim={1}".format(name, output_dim))
+        components.append("component name={0}_relu type=RectifiedLinearComponent dim={1} {2}".format(name, output_dim, self_repair_string))
 
-    component_nodes.append("component-node name={0}_affine component={0}_affine input={1}".format(name, input['descriptor']))
-    component_nodes.append("component-node name={0}_relu component={0}_relu input={0}_affine".format(name))
-    component_nodes.append("component-node name={0}_renorm component={0}_renorm input={0}_relu".format(name))
+        component_nodes.append("component-node name={0}_affine component={0}_affine input={1}".format(name, input['descriptor']))
+        component_nodes.append("component-node name={0}_bnnorm component={0}_bnnorm input={0}_affine".format(name))
+        component_nodes.append("component-node name={0}_relu component={0}_relu input={0}_bnnorm".format(name))
 
-    return {'descriptor':  '{0}_renorm'.format(name),
-            'dimension': output_dim}
+        return {'descriptor':  '{0}_relu'.format(name),
+                'dimension': output_dim}
+    else:
+        components.append("component name={0}_relu type=RectifiedLinearComponent dim={1} {2}".format(name, output_dim, self_repair_string))
+        components.append("component name={0}_renorm type=NormalizeComponent dim={1} target-rms={2}".format(name, output_dim, norm_target_rms))
+
+        component_nodes.append("component-node name={0}_affine component={0}_affine input={1}".format(name, input['descriptor']))
+        component_nodes.append("component-node name={0}_relu component={0}_relu input={0}_affine".format(name))
+        component_nodes.append("component-node name={0}_renorm component={0}_renorm input={0}_relu".format(name))
+
+        return {'descriptor':  '{0}_renorm'.format(name),
+                'dimension': output_dim}
 
 def AddConvolutionLayer(config_lines, name, input,
                        input_x_dim, input_y_dim, input_z_dim,
