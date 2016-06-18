@@ -153,5 +153,7 @@ for n in $(seq $nj);do
 done
 wait
 
+steps/diagnostic/analyze_alignments.sh --cmd "$cmd" $lang $dir
+
 echo "$0: done aligning data."
 
