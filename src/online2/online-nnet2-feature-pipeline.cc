@@ -53,7 +53,17 @@ OnlineNnet2FeaturePipelineInfo::OnlineNnet2FeaturePipelineInfo(
       KALDI_WARN << "--fbank-config option has no effect "
                  << "since feature type is set to " << feature_type << ".";
   }  // else use the defaults.
-  
+
+  use_cmvn = false;
+  if (config.online_cmvn_config != "") {
+    use_cmvn = true;
+    KALDI_VLOG(2) << "Read cmvn config.";
+    ReadConfigFromFile(config.online_cmvn_config, &cmvn_opts);
+    global_cmvn_stats_rxfilename = config.global_cmvn_stats_rxfilename;
+    if (global_cmvn_stats_rxfilename == "")
+      KALDI_ERR << "--global-cmvn-stats option is required.";
+  }  // else use the defaults.
+
   add_pitch = config.add_pitch;
   
   if (config.online_pitch_config != "") {
@@ -89,16 +99,42 @@ OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
     KALDI_ERR << "Code error: invalid feature type " << info_.feature_type;
   }
 
+  {
+    cmvn_ = NULL;
+    if (info_.use_cmvn) {
+      KALDI_VLOG(2) << "Using cmvn feature.";
+      KALDI_ASSERT(info_.global_cmvn_stats_rxfilename != "");
+      ReadKaldiObject(info_.global_cmvn_stats_rxfilename,
+                      &global_cmvn_stats_);
+      KALDI_ASSERT(global_cmvn_stats_.NumRows() != 0);
+      int32 global_dim = global_cmvn_stats_.NumCols() - 1;
+      int32 dim = base_feature_->Dim();
+      KALDI_ASSERT(global_dim >= dim);
+      if (global_dim > dim) {
+        Matrix<BaseFloat> last_col(global_cmvn_stats_.ColRange(global_dim, 1));
+        global_cmvn_stats_.Resize(global_cmvn_stats_.NumRows(), dim + 1,
+                                  kCopyData);
+        global_cmvn_stats_.ColRange(dim, 1).CopyFromMat(last_col);
+      }
+      Matrix<double> global_cmvn_stats_dbl(global_cmvn_stats_);
+      OnlineCmvnState initial_state(global_cmvn_stats_dbl);
+      cmvn_ = new OnlineCmvn(info_.cmvn_opts, initial_state, base_feature_);
+      feature_ = cmvn_;
+    } else {
+      feature_ = base_feature_;
+    }
+  }
+
   if (info_.add_pitch) {
     pitch_ = new OnlinePitchFeature(info_.pitch_opts);
     pitch_feature_ = new OnlineProcessPitch(info_.pitch_process_opts,
                                             pitch_);
-    feature_plus_optional_pitch_ = new OnlineAppendFeature(base_feature_,
-                                                           pitch_feature_);
+    feature_plus_optional_pitch_ = new OnlineAppendFeature(feature_,
+                                                         pitch_feature_);
   } else {
     pitch_ = NULL;
     pitch_feature_ = NULL;
-    feature_plus_optional_pitch_ = base_feature_;
+    feature_plus_optional_pitch_ = feature_;
   }
 
   if (info_.use_ivectors) {
@@ -128,6 +164,22 @@ void OnlineNnet2FeaturePipeline::GetFrame(int32 frame,
   return final_feature_->GetFrame(frame, feat);
 }
 
+void OnlineNnet2FeaturePipeline::SetCmvnState(const OnlineCmvnState &cmvn_state) {
+  if (cmvn_)
+    cmvn_->SetState(cmvn_state);
+  else
+    KALDI_WARN << "Not use cmvn!";
+}
+
+void OnlineNnet2FeaturePipeline::GetCmvnState(OnlineCmvnState *cmvn_state) {
+  if (cmvn_) {
+    int32 frame = cmvn_->NumFramesReady() - 1;
+    // the following call will crash if no frames are ready.
+    cmvn_->GetState(frame, cmvn_state);
+  } else
+    KALDI_WARN << "Not use cmvn!";
+}
+
 void OnlineNnet2FeaturePipeline::SetAdaptationState(
     const OnlineIvectorExtractorAdaptationState &adaptation_state) {
   if (info_.use_ivectors) {
@@ -153,10 +205,11 @@ OnlineNnet2FeaturePipeline::~OnlineNnet2FeaturePipeline() {
   if (final_feature_ != feature_plus_optional_pitch_)
     delete final_feature_;
   delete ivector_feature_;
-  if (feature_plus_optional_pitch_ != base_feature_)
+  if (feature_plus_optional_pitch_ != feature_)
     delete feature_plus_optional_pitch_;
   delete pitch_feature_;
   delete pitch_;
+  delete cmvn_;
   delete base_feature_;
 }
 
