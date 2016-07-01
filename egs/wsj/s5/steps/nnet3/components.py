@@ -420,6 +420,7 @@ def AddLstmLayer(config_lines,
             'dimension':output_dim
             }
 
+
 # Equations that specify a Gated Recurrent Unit (GRU) layer
 # (according to Eqn. (10) in the paper http://arxiv.org/pdf/1512.02595v1.pdf,
 # except that we scale h(t-1) by r(t) prior to the appplication of Whh as standard GRUs):
@@ -519,6 +520,31 @@ def AddGruLayer(config_lines,
 
     output_descriptor = '{0}_p_t'.format(name)
     output_dim = non_recurrent_projection_dim
+
+
+def AddBLstmLayer(config_lines,
+                  name, input, cell_dim,
+                  recurrent_projection_dim = 0,
+                  non_recurrent_projection_dim = 0,
+                  clipping_threshold = 1.0,
+                  norm_based_clipping = "false",
+                  ng_per_element_scale_options = "",
+                  ng_affine_options = "",
+                  lstm_delay = [-1,1],
+                  self_repair_scale = None):
+    assert(len(lstm_delay) == 2 and lstm_delay[0] < 0 and lstm_delay[1] > 0)
+    output_forward = AddLstmLayer(config_lines, "{0}_forward".format(name), input, cell_dim,
+                                  recurrent_projection_dim, non_recurrent_projection_dim,
+                                  clipping_threshold, norm_based_clipping,
+                                  ng_per_element_scale_options, ng_affine_options,
+                                  lstm_delay = lstm_delay[0], self_repair_scale = self_repair_scale)
+    output_backward = AddLstmLayer(config_lines, "{0}_backward".format(name), input, cell_dim,
+                                   recurrent_projection_dim, non_recurrent_projection_dim,
+                                   clipping_threshold, norm_based_clipping,
+                                   ng_per_element_scale_options, ng_affine_options,
+                                   lstm_delay = lstm_delay[1], self_repair_scale = self_repair_scale)
+    output_descriptor = 'Append({0}, {1})'.format(output_forward['descriptor'], output_backward['descriptor'])
+    output_dim = output_forward['dimension'] + output_backward['dimension']
 
     return {
             'descriptor': output_descriptor,
