@@ -6,6 +6,7 @@
 
 data=data
 lm_suffix="tg"
+lang_suffix=""
 
 # End configuration.
 
@@ -14,7 +15,7 @@ echo "$0 $@"  # Print the command line for logging
 [ -f path.sh ] && . ./path.sh;
 . parse_options.sh || exit 1;
 
-echo "Preparing decode ."
+# echo "Preparing decode ."
 lmdir=$data/local/lm
 tmpdir=$data/local/lm_tmp
 mkdir -p $tmpdir
@@ -29,17 +30,17 @@ arpa=$1
 
 echo "Preparing language models for test"
 # for lm_suffix in bg tg ; do
-for postfix in ""; do
+for postfix in "$lang_suffix"; do
   lexicon=$data/local/dict/lexicon.txt
-  for lm_suffix in ${lm_suffix}; do
-    test=$data/lang_${lm_suffix}
+  for suffix in ${lm_suffix}; do
+    test=$data/lang_${suffix}
     mkdir -p $test
     for f in phones.txt words.txt phones.txt L.fst L_disambig.fst \
        phones/ topo oov.int oov.txt; do
       cp -r $data/lang$postfix/$f $test
     done
     cat $arpa | \
-     utils/find_arpa_oovs.pl $test/words.txt  > $tmpdir/oovs_${lm_suffix}.txt
+     utils/find_arpa_oovs.pl $test/words.txt  > $tmpdir/oovs_${suffix}.txt
 
     # grep -v '<s> <s>' because the LM seems to have some strange and useless
     # stuff in it with multiple <s>'s in the history.  Encountered some other similar
@@ -51,7 +52,7 @@ for postfix in ""; do
       grep -v '</s> <s>' | \
       grep -v '</s> </s>' | \
       arpa2fst - | fstprint | \
-      utils/remove_oovs.pl $tmpdir/oovs_${lm_suffix}.txt | \
+      utils/remove_oovs.pl $tmpdir/oovs_${suffix}.txt | \
       utils/eps2disambig.pl | utils/s2eps.pl | fstcompile --isymbols=$test/words.txt \
         --osymbols=$test/words.txt  --keep_isymbols=false --keep_osymbols=false | \
        fstrmepsilon | fstarcsort --sort_type=ilabel > $test/G.fst
