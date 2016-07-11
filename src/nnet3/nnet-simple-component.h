@@ -440,8 +440,8 @@ class AffineComponent: public UpdatableComponent {
   // This new function is used when mixing up:
   virtual void SetParams(const VectorBase<BaseFloat> &bias,
                          const MatrixBase<BaseFloat> &linear);
-  const CuVector<BaseFloat> &BiasParams() { return bias_params_; }
-  const CuMatrix<BaseFloat> &LinearParams() { return linear_params_; }
+  const CuVector<BaseFloat> &BiasParams() const { return bias_params_; }
+  const CuMatrix<BaseFloat> &LinearParams() const { return linear_params_; }
   explicit AffineComponent(const AffineComponent &other);
   // The next constructor is used in converting from nnet1.
   AffineComponent(const CuMatrixBase<BaseFloat> &linear_params,
@@ -804,6 +804,13 @@ class NaturalGradientAffineComponent: public AffineComponent {
 class FixedAffineComponent: public Component {
  public:
   FixedAffineComponent() { }
+
+  /// Fix updateable AffineComponent
+  FixedAffineComponent(const AffineComponent &affine) {
+    linear_params_ = affine.LinearParams();
+    bias_params_ = affine.BiasParams();
+  }
+
   virtual std::string Type() const { return "FixedAffineComponent"; }
   virtual std::string Info() const;
 

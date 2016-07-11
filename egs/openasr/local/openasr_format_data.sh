@@ -30,7 +30,7 @@ arpa=$1
 
 echo "Preparing language models for test"
 # for lm_suffix in bg tg ; do
-for postfix in "$lang_suffix"; do
+for postfix in $lang_suffix; do
   lexicon=$data/local/dict/lexicon.txt
   for suffix in ${lm_suffix}; do
     test=$data/lang_${suffix}
