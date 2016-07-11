@@ -223,6 +223,9 @@ class Nnet {
   /// Pruning
   void Prune(const NnetNeuralPruneOpts &prune_opts);
 
+  /// Fix
+  void SwitchToFixedAffine(const std::vector<std::string> &affine_names);
+
   /// returns some human-readable information about the network, mostly for
   /// debugging purposes.
   /// Also see function NnetInfo() in nnet-utils.h, which prints out more

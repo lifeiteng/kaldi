@@ -1058,6 +1058,22 @@ void Nnet::Prune(const NnetNeuralPruneOpts &prune_opts) {
   Check();
 }
 
+void Nnet::SwitchToFixedAffine(const std::vector<std::string> &affine_names) {
+  for (int32 n = 0; n < affine_names.size(); n++) {
+    int32 index = GetComponentIndex(affine_names[n]);
+    if (index == -1)
+      KALDI_WARN << "Can't find '" << affine_names[n] << "' in components_.";
+    else {
+      const AffineComponent *affine =
+        dynamic_cast<const AffineComponent *>(GetComponent(index));
+      FixedAffineComponent *fix = new FixedAffineComponent(*affine);
+      SetComponent(index, fix);
+    } 
+  }
+
+  Check();  
+}
+
 
 // copy constructor
 Nnet::Nnet(const Nnet &nnet):
