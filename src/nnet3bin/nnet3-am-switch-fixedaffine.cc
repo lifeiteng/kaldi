@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
 
     po.Read(argc, argv);
     
-    if (po.NumArgs() != 2) {
+    if (po.NumArgs() != 3) {
       po.PrintUsage();
       exit(1);
     }
