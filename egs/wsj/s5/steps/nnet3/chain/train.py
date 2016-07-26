@@ -128,6 +128,12 @@ def GetArgs():
 
 
     # trainer options
+    parser.add_argument("--trainer.srand", type=int, dest='srand',
+                        default = 0,
+                        help="Sets the random seed for model initialization and egs shuffling. "
+                        "Warning: This random seed does not control all aspects of this experiment. "
+                        "There might be other random seeds used in other stages of the experiment "
+                        "like data preparation (e.g. volume perturbation).")
     parser.add_argument("--trainer.num-epochs", type=int, dest='num_epochs',
                         default = 10,
                         help="Number of epochs to train the model")
@@ -371,7 +377,7 @@ class RunOpts:
         self.password = None
         self.cv_period = 1
 
-def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
+def TrainNewModels(dir, iter, srand, num_jobs, num_archives_processed, num_archives,
                    raw_model_string, egs_dir,
                    apply_deriv_weights,
                    left_deriv_truncate, right_deriv_truncate,
@@ -418,26 +424,26 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
   --print-interval=10 --momentum={momentum} \
   --max-param-change={max_param_change} \
    "{raw_model}" {dir}/den.fst \
-  "ark,bg:nnet3-chain-copy-egs --truncate-deriv-weights={trunc_deriv} --frame-shift={fr_shft} ark:{egs_dir}/cegs.{archive_index}.ark ark:- | nnet3-chain-shuffle-egs --buffer-size={shuffle_buffer_size} --srand={iter} ark:- ark:-| nnet3-chain-merge-egs --minibatch-size={num_chunk_per_minibatch} ark:- ark:- |" \
+  "ark,bg:nnet3-chain-copy-egs --truncate-deriv-weights={trunc_deriv} --frame-shift={fr_shft} ark:{egs_dir}/cegs.{archive_index}.ark ark:- | nnet3-chain-shuffle-egs --buffer-size={shuffle_buffer_size} --srand={srand} ark:- ark:-| nnet3-chain-merge-egs --minibatch-size={num_chunk_per_minibatch} ark:- ark:- |" \
   {dir}/{next_iter}.{job}.raw
-                """.format(command = run_opts.command,
-                         train_queue_opt = run_opts.train_queue_opt,
-                         dir = dir, iter = iter, next_iter = iter + 1, job = job,
-                         deriv_time_opts = deriv_time_opts,
-                         trunc_deriv = truncate_deriv_weights,
-                         app_deriv_wts = apply_deriv_weights,
-                         fr_shft = frame_shift, l2 = l2_regularize,
-                         xent_reg = xent_regularize, leaky = leaky_hmm_coefficient,
-                         parallel_train_opts = run_opts.parallel_train_opts + " --gpu-id=" + str(i),
-                         momentum = momentum, max_param_change = max_param_change,
-                         raw_model = raw_model_string,
-                         egs_dir = egs_dir, archive_index = archive_index,
-                         shuffle_buffer_size = shuffle_buffer_size,
-                         cache_io_opts = cur_cache_io_opts,
-                         num_chunk_per_minibatch = num_chunk_per_minibatch),
+            """.format(command = run_opts.command,
+                     train_queue_opt = run_opts.train_queue_opt,
+                     dir = dir, iter = iter, srand = iter + srand, next_iter = iter + 1, job = job,
+                     deriv_time_opts = deriv_time_opts,
+                     trunc_deriv = truncate_deriv_weights,
+                     app_deriv_wts = apply_deriv_weights,
+                     fr_shft = frame_shift, l2 = l2_regularize,
+                     xent_reg = xent_regularize, leaky = leaky_hmm_coefficient,
+                     parallel_train_opts = run_opts.parallel_train_opts + " --gpu-id=" + str(i),
+                     momentum = momentum, max_param_change = max_param_change,
+                     raw_model = raw_model_string,
+                     egs_dir = egs_dir, archive_index = archive_index,
+                     shuffle_buffer_size = shuffle_buffer_size,
+                     cache_io_opts = cur_cache_io_opts,
+                     num_chunk_per_minibatch = num_chunk_per_minibatch),
                 wait = False)
-            if str(i) == '-1':
-                time.sleep(5)
+            # if str(i) == '-1':
+            #     time.sleep(1)
             job += 1
             gpu_processes.append(process_handle)
 
@@ -447,7 +453,7 @@ def TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
             processes.extend(gpu_processes)
     train_lib.AllSuccess(dir, iter, processes)
 
-def TrainOneIteration(dir, iter, num_iters, pruner_iters, egs_dir,
+def TrainOneIteration(dir, iter, srand, num_iters, pruner_iters, egs_dir,
                       num_jobs, num_archives_processed, num_archives,
                       learning_rate, shrinkage_value, num_chunk_per_minibatch,
                       num_hidden_layers, add_layers_period,
@@ -460,19 +466,33 @@ def TrainOneIteration(dir, iter, num_iters, pruner_iters, egs_dir,
     # Set off jobs doing some diagnostics, in the background.
     # Use the egs dir from the previous iteration for the diagnostics
     logger.info("Training neural net (pass {0} / {1})".format(iter, num_iters))
-    
+
+    # check if different iterations use the same random seed
+    if os.path.exists('{0}/srand'.format(dir)):
+        try:
+            saved_srand = int(open('{0}/srand'.format(dir), 'r').readline().strip())
+        except IOError, ValueError:
+            raise Exception('Exception while reading the random seed for training')
+        if srand != saved_srand:
+            logger.warning("The random seed provided to this iteration (srand={0}) is different from the one saved last time (srand={1}). Using srand={0}.".format(srand, saved_srand))
+    else: 
+        f = open('{0}/srand'.format(dir), 'w')                              
+        f.write(str(srand))                                                      
+        f.close()
+   
     if iter % run_opts.cv_period == 0 or iter in pruner_iters:
         chain_lib.ComputeTrainCvProbabilities(dir, iter, egs_dir,
                 l2_regularize, xent_regularize, leaky_hmm_coefficient, run_opts)
         if iter > 0:
             chain_lib.ComputeProgress(dir, iter, run_opts)
 
+
     if iter > 0 and (iter <= (num_hidden_layers-1) * add_layers_period) and (iter % add_layers_period == 0):
         do_average = False # if we've just mixed up, don't do averaging but take the
                            # best.
         cur_num_hidden_layers = 1 + iter / add_layers_period
         config_file = "{0}/configs/layer{1}.config".format(dir, cur_num_hidden_layers)
-        raw_model_string = "nnet3-am-copy --raw=true --learning-rate={lr} {dir}/{iter}.mdl - | nnet3-init --srand={iter} - {config} - |".format(lr=learning_rate, dir=dir, iter=iter, config=config_file)
+        raw_model_string = "nnet3-am-copy --raw=true --learning-rate={lr} {dir}/{iter}.mdl - | nnet3-init --srand={srand} - {config} - |".format(lr=learning_rate, dir=dir, iter=iter, srand=iter + srand, config=config_file)
         cache_io_opts = ""
     else:
         do_average = True
@@ -493,7 +513,7 @@ def TrainOneIteration(dir, iter, num_iters, pruner_iters, egs_dir,
       cur_num_chunk_per_minibatch = num_chunk_per_minibatch / 2
       cur_max_param_change = float(max_param_change) / math.sqrt(2)
 
-    TrainNewModels(dir, iter, num_jobs, num_archives_processed, num_archives,
+    TrainNewModels(dir, iter, srand, num_jobs, num_archives_processed, num_archives,
                    raw_model_string, egs_dir,
                    apply_deriv_weights,
                    left_deriv_truncate, right_deriv_truncate,
@@ -618,6 +638,7 @@ def Train(args, run_opts):
                                     cmvn_opts = args.cmvn_opts,
                                     online_ivector_dir = args.online_ivector_dir,
                                     frames_per_iter = args.frames_per_iter,
+                                    srand = args.srand,
                                     transform_dir = args.transform_dir,
                                     stage = args.egs_stage)
 
@@ -719,7 +740,7 @@ def Train(args, run_opts):
 
             logger.info("On iteration {0}, learning rate is {1} and shrink value is {2}.".format(iter, learning_rate(iter, current_num_jobs, num_archives_processed), shrinkage_value))
 
-            TrainOneIteration(args.dir, iter, num_iters, pruner_iters, egs_dir, current_num_jobs,
+            TrainOneIteration(args.dir, iter, args.srand, num_iters, pruner_iters, egs_dir, current_num_jobs,
                               num_archives_processed, num_archives,
                               learning_rate(iter, current_num_jobs, num_archives_processed),
                               shrinkage_value,

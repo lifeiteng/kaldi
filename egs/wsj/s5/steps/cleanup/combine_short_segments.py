@@ -10,6 +10,7 @@ import subprocess
 import errno
 import copy
 import shutil
+import warnings
 
 def GetArgs():
     # we add compulsary arguments as named arguments for readability
@@ -262,11 +263,9 @@ def CombineSegments(input_dir, output_dir, minimum_duration):
                 if not cur_utt_dur >= minimum_duration:
                     # this is a rare occurrence, better make the user aware of this
                     # situation and let them deal with it
-                    error_info = 'Speaker {0} does not have enough utterances to satisfy the minimum duration constraint'.format(speaker)
-                    print(error_info)
-                    break
-                    # raise Exception(error_info)
-
+                    warnings.warn('Speaker {0} does not have enough utterances to satisfy the minimum duration constraint. Not modifying these utterances'.format(speaker))
+                    utt_index = utt_index + 1
+                    continue
                 combined_duration = 0
                 combined_utts = []
                 # update the utts_dur dictionary
