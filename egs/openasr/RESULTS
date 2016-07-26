@@ -26,8 +26,14 @@ for x in $exp/dnn*/*decode*; do
 	[ -d $x ] && grep WER $x/wer_* 2>/dev/null | utils/best_wer.sh; 
 done
 
-for x in $exp/nnet3/*/*decode*; do
-	[ -d $x ] && grep WER $x/wer_* 2>/dev/null | utils/best_wer.sh; 
+for x in $exp/*/*decode*; do
+	[ -d $x ] && grep WER $x/wer_* 2>/dev/null | grep -v wer_correct | utils/best_wer.sh; 
 done
+
+
+# for x in $exp/*/*decode*; do
+# 	[ -d $x ] && grep WER $x/wer_* 2>/dev/null | utils/best_wer.sh; 
+# done
+
 
 exit 0
