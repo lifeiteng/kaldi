@@ -848,7 +848,6 @@ echo "Doing OS specific configurations ..."
 # which crashes on Darwin. Also the linear algebra libraries on Macs are
 # used differently (through the Accelerate framework) than on Linux.
 if [ "`uname`" == "Darwin"  ]; then
- $use_cuda && configure_cuda
   echo "On Darwin: checking for Accelerate framework ..."
   if [ ! -e /System/Library/Frameworks/Accelerate.framework ]; then
     failure "Need the Accelerate.framework to compile on Darwin."
@@ -891,6 +890,7 @@ if [ "`uname`" == "Darwin"  ]; then
   else
     failure "OS X version '$osx_ver' not supported"
   fi
+  $use_cuda && configure_cuda
   echo "Configuration succeeded for platform Darwin."
   exit_success;
 fi
