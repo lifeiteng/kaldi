@@ -48,6 +48,7 @@ example : steps/nnet3/report/generate_plots.py --comparison-dir exp/nnet3/tdnn1 
 """)
     parser.add_argument("--comparison-dir", type=str, action='append', help="other experiment directories for comparison. These will only be used for plots, not tables")
     parser.add_argument("--start-iter", type=int, help="Iteration from which plotting will start", default = 1)
+    parser.add_argument("--end-iter", type=int, help="Iteration to which plotting will end", default = 10000)
     parser.add_argument("--is-chain", type=str, default = False, action = train_lib.StrToBoolAction, help="Iteration from which plotting will start")
     parser.add_argument("exp_dir", help="experiment directory, e.g. exp/nnet3/tdnn")
     parser.add_argument("output_dir", help="experiment directory, e.g. exp/nnet3/tdnn/report")
@@ -110,7 +111,7 @@ class LatexReport:
             return False
         return True
 
-def GenerateAccuracyPlots(exp_dir, output_dir, plot, key = 'accuracy', file_basename = 'accuracy', comparison_dir = None, start_iter = 1, latex_report = None):
+def GenerateAccuracyPlots(exp_dir, output_dir, plot, key = 'accuracy', file_basename = 'accuracy', comparison_dir = None, start_iter = 1, end_iter = 10000, latex_report = None):
     assert(start_iter >= 1)
 
     if plot:
@@ -134,6 +135,7 @@ def GenerateAccuracyPlots(exp_dir, output_dir, plot, key = 'accuracy', file_base
             if data.shape[0] == 0:
                 raise Exception("Couldn't find any rows for the accuracy plot")
             data = data[data[:,0]>=start_iter, :]
+            data = data[data[:,0] <= end_iter, :]
             plot_handle, = plt.plot(data[:, 0], data[:, 1], color = color_val, linestyle = "--", label = "train {0}".format(dir))
             plots.append(plot_handle)
             plot_handle, = plt.plot(data[:, 0], data[:, 2], color = color_val, label = "valid {0}".format(dir))
@@ -150,7 +152,7 @@ def GenerateAccuracyPlots(exp_dir, output_dir, plot, key = 'accuracy', file_base
         if latex_report is not None:
             latex_report.AddFigure(figfile_name, "Plot of {0} vs iterations".format(key))
 
-def GenerateNonlinStatsPlots(exp_dir, output_dir, plot, comparison_dir = None, start_iter = 1, latex_report = None):
+def GenerateNonlinStatsPlots(exp_dir, output_dir, plot, comparison_dir = None, start_iter = 1, end_iter = 10000, latex_report = None):
     assert(start_iter >= 1)
 
     comparison_dir = [] if comparison_dir is None else comparison_dir
@@ -221,6 +223,7 @@ def GenerateNonlinStatsPlots(exp_dir, output_dir, plot, comparison_dir = None, s
 
                 data = np.array(iter_stats)
                 data = data[data[:,0] >=start_iter, :]
+                data = data[data[:,0] <= end_iter, :]
                 ax = plt.subplot(211)
                 mp, = ax.plot(data[:,0], data[:,1], color=color_val, label="Mean {0}".format(dir))
                 msph, = ax.plot(data[:,0], data[:,1] + data[:,2], color=color_val, linestyle='--', label = "Mean+-Stddev {0}".format(dir))
@@ -246,7 +249,7 @@ def GenerateNonlinStatsPlots(exp_dir, output_dir, plot, comparison_dir = None, s
             if latex_report is not None:
                 latex_report.AddFigure(figfile_name, "Mean and stddev of the value and derivative at {0}".format(component_name))
 
-def GeneratePlots(exp_dir, output_dir, comparison_dir = None, start_iter = 1, is_chain = False):
+def GeneratePlots(exp_dir, output_dir, comparison_dir = None, start_iter = 1, end_iter = 10000, is_chain = False):
     try:
         os.makedirs(output_dir)
     except OSError as e:
@@ -262,16 +265,16 @@ def GeneratePlots(exp_dir, output_dir, comparison_dir = None, start_iter = 1, is
 
     if is_chain:
         logger.info("Generating log-probability plots")
-        GenerateAccuracyPlots(exp_dir, output_dir, plot, key = 'log-probability', file_basename = 'log_probability', comparison_dir = comparison_dir, start_iter = start_iter, latex_report = latex_report)
+        GenerateAccuracyPlots(exp_dir, output_dir, plot, key = 'log-probability', file_basename = 'log_probability', comparison_dir = comparison_dir, start_iter = start_iter, end_iter = end_iter, latex_report = latex_report)
     else:
         logger.info("Generating accuracy plots")
-        GenerateAccuracyPlots(exp_dir, output_dir, plot, key = 'accuracy', file_basename = 'accuracy', comparison_dir = comparison_dir, start_iter = start_iter, latex_report = latex_report)
+        GenerateAccuracyPlots(exp_dir, output_dir, plot, key = 'accuracy', file_basename = 'accuracy', comparison_dir = comparison_dir, start_iter = start_iter, end_iter = end_iter, latex_report = latex_report)
 
         logger.info("Generating log-likelihood plots")
-        GenerateAccuracyPlots(exp_dir, output_dir, plot, key = 'log-likelihood', file_basename = 'loglikelihood', comparison_dir = comparison_dir, start_iter = start_iter, latex_report = latex_report)
+        GenerateAccuracyPlots(exp_dir, output_dir, plot, key = 'log-likelihood', file_basename = 'loglikelihood', comparison_dir = comparison_dir, start_iter = start_iter, end_iter = end_iter, latex_report = latex_report)
 
     logger.info("Generating non-linearity stats plots")
-    GenerateNonlinStatsPlots(exp_dir, output_dir, plot, comparison_dir = comparison_dir, start_iter = start_iter, latex_report = latex_report)
+    GenerateNonlinStatsPlots(exp_dir, output_dir, plot, comparison_dir = comparison_dir, start_iter = start_iter, end_iter = end_iter, latex_report = latex_report)
 
     logger.info("Generating parameter difference files")
     # Parameter changes
@@ -293,6 +296,7 @@ def Main():
     GeneratePlots(args.exp_dir, args.output_dir,
                   comparison_dir = args.comparison_dir,
                   start_iter = args.start_iter,
+                  end_iter = args.end_iter,
                   is_chain = args.is_chain)
 
 if __name__ == "__main__":

@@ -225,6 +225,8 @@ def GetArgs():
     # General options
     parser.add_argument("--stage", type=int, default=-4,
                         help="Specifies the stage of the experiment to execution from")
+    parser.add_argument("--adapt-stage", type=int, default=0,
+                        help="Specifies the stage of the experiment to execution from")
     parser.add_argument("--exit-stage", type=int, default=None,
                         help="If specified, training exits before running this stage")
     parser.add_argument("--warm-iters", type=int, default=10,
@@ -690,7 +692,7 @@ def Train(args, run_opts):
         elif (current_num_jobs % run_opts.num_gpus != 0):
             current_num_jobs = current_num_jobs / run_opts.num_gpus * run_opts.num_gpus
 
-        if args.stage <= iter:
+        if args.stage <= iter and args.adapt_stage <= iter:
             if args.shrink_value != 1.0:
                 model_file = "{dir}/{iter}.mdl".format(dir = args.dir, iter = iter)
                 shrinkage_value = args.shrink_value if train_lib.DoShrinkage(iter, model_file, args.shrink_nonlinearity, args.shrink_threshold) else 1

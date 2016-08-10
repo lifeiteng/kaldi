@@ -139,7 +139,7 @@ if [ $stage -le 0 ]; then
        --acoustic-scale=$acwt --word-symbol-table=$graphdir/words.txt \
        $srcdir/${iter}.mdl $graphdir/HCLG.fst $spk2utt_rspecifier "$wav_rspecifier" \
         "$lat_wspecifier" || exit 1 &
-    sleep 2
+    sleep 5
   done
   wait
 fi

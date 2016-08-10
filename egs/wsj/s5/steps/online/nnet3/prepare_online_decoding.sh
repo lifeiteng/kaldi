@@ -37,6 +37,8 @@ iter=final
 
 online_cmvn=false
 cmvn_scp=
+global_cmvn_states=
+
 # End configuration.
 
 echo "$0 $@"  # Print the command line for logging
@@ -171,18 +173,28 @@ if $add_pitch; then
 fi
 
 if $online_cmvn; then
-  for f in $cmvn_scp $srcdir/cmvn_opts; do
+  for f in $srcdir/cmvn_opts; do
     [ ! -f $f ] && echo "$0: no such file $f" && exit 1;
   done
   cat $srcdir/cmvn_opts | sed 's/means/mean/g' | awk '{for(i=1;i<=NF;i++) print $i;}' >$dir/conf/cmvn_opts || exit 1;
   echo "--online-cmvn-config=$dir/conf/cmvn_opts" >>$conf
-
-  # create global_cmvn.stats
-  if ! matrix-sum --binary=false scp:$cmvn_scp $dir/conf/global_cmvn.stats 2>/dev/null; then
-    echo "$0: Error summing cmvn stats"
-    exit 1
+  
+  if [ -z $global_cmvn_states ];then
+    for f in $cmvn_scp; do
+      [ ! -f $f ] && echo "$0: no such file $f" && exit 1;
+    done
+    # create global_cmvn.stats
+    if ! matrix-sum --binary=false scp:$cmvn_scp $dir/conf/global_cmvn.stats 2>/dev/null; then
+      echo "$0: Error summing cmvn stats"
+      exit 1
+    fi
+    echo "--global-cmvn-stats=$dir/conf/global_cmvn.stats" >>$conf
+  else
+    for f in $global_cmvn_states; do
+      [ ! -f $f ] && echo "$0: no such file $f" && exit 1;
+    done
+    echo "--global-cmvn-stats=$global_cmvn_states" >>$conf
   fi
-  echo "--global-cmvn-stats=$dir/conf/global_cmvn.stats" >>$conf
 fi
 
 echo "--extra-left-context=$extra_left_context" >>$conf

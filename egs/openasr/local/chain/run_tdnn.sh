@@ -16,11 +16,13 @@ set -e
 # configs for 'chain'
 stage=100
 train_stage=-10
+adapt_stage=0
+cleanup=true
+
 get_egs_stage=-10
 common_stage=
 
 decode_stage=0
-
 
 affix=
 common_egs_dir=
@@ -33,7 +35,11 @@ pruner_lambda=1
 
 # training options
 leftmost_questions_truncate=-1
-numTreeLeaves=5000
+
+TreeLeaves=4000
+frame_subsampling_factor=3
+tree_suffix=""
+tree_dir=exp/chain/tri3_tree
 
 frames_per_eg=150
 xent_regularize=0.1
@@ -63,7 +69,11 @@ decode_opts=
 online_cmvn=true
 skip_decode=true
 egs_opts=
+nnet_jobs=3
+extra_egs_dirs=
 
+final_normalize_target=0.5
+self_repair_scale=0.00001
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
 
@@ -79,21 +89,20 @@ where "nvcc" is installed.
 EOF
 fi
 
-dir=$dir${affix:+_$affix}
-# if [ $label_delay -gt 0 ]; then dir=${dir}_ld$label_delay; fi
 dir=${dir}$suffix
 mkdir -p $dir/egs
 
-mkdir -p $dir/egs
+if [ -z $tree_dir ];then
+  tree_dir=exp/chain/tri3_tree_${TreeLeaves}$tree_suffix
+  echo "TreeDir is $tree_dir"
+fi
 
-TreeLeaves=4000
-# treedir=exp/chain/tri3_f_tree_${TreeLeaves}$suffix
 data=data_fbank_hires
 src_model=exp/tri3
 lats_dir=exp/tri3_all_lats
 
 ali_dir=exp/tri3_all_ali
-tree_dir=exp/chain/tri3_tree
+
 lang=$data/lang_chain
 ivector_dir=""
 
@@ -129,12 +138,12 @@ fi
 #       --cmd "$train_cmd" $numTreeLeaves data_mfcc/train_all $lang $ali_dir $tree_dir
 # fi
 
-# if [ $stage -le 8 ]; then
-#   # Build a tree using our new topology.
-#   steps/nnet3/chain/build_tree.sh --frame-subsampling-factor 3 \
-#       --leftmost-questions-truncate -1 \
-#       --cmd "$train_cmd" $TreeLeaves data_mfcc/train_all $lang exp/tri3_all_ali $treedir || exit 1;
-# fi
+if [ $stage -le 8 ]; then
+  # Build a tree using our new topology.
+  steps/nnet3/chain/build_tree.sh --frame-subsampling-factor $frame_subsampling_factor  \
+      --leftmost-questions-truncate -1 \
+      --cmd "$train_cmd" $TreeLeaves data_mfcc/train_all $lang exp/tri3_all_ali $tree_dir || exit 1;
+fi
 
 . $dir/vars || exit 1;
 
@@ -143,7 +152,7 @@ if [ $stage -le 9 ]; then
   bottleneck_dim_opts=""
   [ ! -z $bottleneck_dim ] && bottleneck_dim_opts="--bottleneck-dim $bottleneck_dim"
   steps/nnet3/tdnn/make_configs.py \
-    --self-repair-scale 0.00001 \
+    --self-repair-scale $self_repair_scale \
     --feat-dir $train_data_dir \
     --tree-dir $tree_dir \
     --relu-dim $relu_dim $bottleneck_dim_opts \
@@ -152,21 +161,53 @@ if [ $stage -le 9 ]; then
     --xent-regularize $xent_regularize \
     --xent-separate-forward-affine true \
     --include-log-softmax false \
-    --final-layer-normalize-target 0.5 \
+    --final-layer-normalize-target $final_normalize_target \
    $dir/configs || exit 1;
 fi
 
-if [ $stage -le 10 ]; then
+# if [ -z $common_egs_dir ]; then
+#   mkdir -p $dir/egs
+#   if [ $stage -le 11 ];then
+#     steps/nnet3/chain/train_get_egs.py --stage -4 \
+#       --cmd "$decode_cmd" \
+#       --feat.cmvn-opts "$cmvn_opts" \
+#       --chain.frame-subsampling-factor $frame_subsampling_factor \
+#       --chain.alignment-subsampling-factor $frame_subsampling_factor \
+#       --egs.dir "" \
+#       --egs.stage $get_egs_stage \
+#       --egs.opts "--frames-overlap-per-eg 0 $egs_opts " \
+#       --egs.chunk-width $frames_per_eg \
+#       --egs.extra-egs-dirs "$extra_egs_dirs" \
+#       --trainer.frames-per-iter 1500000 \
+#       --feat-dir $train_data_dir \
+#       --tree-dir $tree_dir \
+#       --lat-dir $lat_dir \
+#       --dir $dir  || exit 1;
+#   fi
+  
+#   if [ ! -z $extra_egs_dirs  ];then
+#     if [ ! -d $dir/egs_combine ];then
+#       echo "Fail to combine Egs."
+#       exit 1;
+#     fi
+#     common_egs_dir=$dir/egs_combine
+#   else
+#     common_egs_dir=$dir/egs
+#   fi
+# fi
+
+if [ $stage -le 12 ]; then
   if [[ $(hostname -f) == *.clsp.jhu.edu ]] && [ ! -d $dir/egs/storage ]; then
     utils/create_split_dir.pl \
      /export/b0{5,6,7,8}/$USER/kaldi-data/egs/ami-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
   fi
   touch $dir/egs/.nodelete # keep egs around when that run dies.
-
+  mkdir -p $dir/log
   # --feat.online-ivector-dir "$ivector_dir" \
   exit_stage_opts=""
   [ ! -z $exit_stage ] && exit_stage_opts="--exit-stage $exit_stage"
   steps/nnet3/chain/train.py --stage $train_stage $exit_stage_opts \
+    --adapt-stage $adapt_stage \
     --cmd "$decode_cmd" \
     --feat.cmvn-opts "$cmvn_opts" \
     --chain.xent-regularize $xent_regularize \
@@ -174,6 +215,8 @@ if [ $stage -le 10 ]; then
     --chain.l2-regularize 0.00005 \
     --chain.apply-deriv-weights false \
     --chain.lm-opts="--num-extra-lm-states=2000" \
+    --chain.frame-subsampling-factor $frame_subsampling_factor \
+    --chain.alignment-subsampling-factor $frame_subsampling_factor \
     --egs.dir "$common_egs_dir" \
     --egs.stage $get_egs_stage \
     --egs.opts "--frames-overlap-per-eg 0 $egs_opts " \
@@ -181,8 +224,8 @@ if [ $stage -le 10 ]; then
     --trainer.num-chunk-per-minibatch 128 \
     --trainer.frames-per-iter 1500000 \
     --trainer.num-epochs $num_epochs \
-    --trainer.optimization.num-jobs-initial 3 \
-    --trainer.optimization.num-jobs-final 3 \
+    --trainer.optimization.num-jobs-initial $nnet_jobs \
+    --trainer.optimization.num-jobs-final $nnet_jobs \
     --trainer.optimization.initial-effective-lrate $initial_effective_lrate \
     --trainer.optimization.final-effective-lrate $final_effective_lrate \
     --trainer.max-param-change 2.0 \
@@ -190,6 +233,7 @@ if [ $stage -le 10 ]; then
     --pruner.per-layer $pruner_perlayer \
     --pruner.lambda $pruner_lambda \
     --cleanup.remove-egs false \
+    --cleanup $cleanup \
     --feat-dir $train_data_dir \
     --tree-dir $tree_dir \
     --lat-dir $lat_dir \
@@ -200,7 +244,9 @@ if [ $stage -le 10 ]; then
     --dir $dir  || exit 1;
 fi
 
-$skip_decode && exit 0;
+if $skip_decode;then
+  exit 0;
+fi
 
 if [ -z $graph_dir ] && [ $stage -le 11 ]; then
   # Note: it might appear that this $lang directory is mismatched, and it is as
