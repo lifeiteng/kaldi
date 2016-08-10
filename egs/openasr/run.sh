@@ -54,14 +54,13 @@ if [ $stage -le -2 ];then
     #     rm -rf data/local/dict
     #     mkdir -p data/local/dict
     #     cat /data/dictionary/{TEDLIUM.150K.dic,9001.dict} >data/local/dict/lexicon_9001_ted.txt
-    #     local/std_prepare_dict.sh --data data --phoneset 9000 data/local/dict/lexicon_9001_ted.txt || exit 1;
+    #     local/openasr_prepare_dict.sh --data data --phoneset 9000 data/local/dict/lexicon_9001_ted.txt || exit 1;
     # )
     
     # echo "========  准备langs    ========"
     # # Prepare $${lang} and $data/local/lang directories
     # utils/prepare_lang.sh --share-silence-phones true --num-sil-states 3 --position-dependent-phones false \
     #     data/local/dict '!SIL' data/local/lang_tmp data/lang || exit 1;
-    # exit 1;
 
     # echo "========  数据清洗     ========"
     # dict=data/local/dict/lexicon.txt
@@ -83,10 +82,10 @@ if [ $stage -le -2 ];then
     # # echo "========  准备语言模型  ========"
     # # local/std_prepare_lm.sh --data data || exit 1;
 
-    # # echo "========  format data ========"
+    # echo "========  format data ========"
     # local/std_format_data.sh --data data --lm-suffix "translm_tg" data/local/lm/trans_lm_3.arpa || exit 1;
-    # local/std_format_data.sh --data data --lm-suffix "biglm_tg" /data/LM/interp_lm.prune-8 || exit 1 &
-
+    local/openasr_format_data.sh --data data --lm-suffix "biglm_tg" /data/LM/interp_lm.prune-8 || exit 1 &
+    exit 1;
     # (
     # echo "======== 统计 duration ========"
     # # for x in voxpop tedlium openasr-01;do

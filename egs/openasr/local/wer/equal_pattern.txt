@@ -1,3 +1,7 @@
+1494 (err)<-()
+954 (um)<-()
+105 (uh)<-()
+
 (you are)<-(you're)
 (i'll)<-(i will)
 3 (super power)<-(superpower)
@@ -9,6 +13,8 @@
 62 (um)<-(hm)
 50 (ah)<-(uh)
 40 (um)<-(hmm)
+(hmm)<-(um)
+(hm)<-(um)
 (um)<-(uh)
 14 (i am)<-(i'm)
 13 (err)<-(um)
