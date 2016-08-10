@@ -65,7 +65,7 @@ OnlineNnet2FeaturePipelineInfo::OnlineNnet2FeaturePipelineInfo(
   }  // else use the defaults.
 
   add_pitch = config.add_pitch;
-  
+
   if (config.online_pitch_config != "") {
     ReadConfigsFromFile(config.online_pitch_config,
                         &pitch_opts,
@@ -235,9 +235,11 @@ void OnlineNnet2FeaturePipeline::InputFinished() {
 
 BaseFloat OnlineNnet2FeaturePipelineInfo::FrameShiftInSeconds() const {
   if (feature_type == "mfcc") {
-    return mfcc_opts.frame_opts.frame_shift_ms * 1.0e-03;
+    return mfcc_opts.frame_opts.frame_shift_ms / 1000.0f;
+  } else if (feature_type == "fbank") {
+    return fbank_opts.frame_opts.frame_shift_ms / 1000.0f;
   } else if (feature_type == "plp") {
-    return plp_opts.frame_opts.frame_shift_ms * 1.0e-03;
+    return plp_opts.frame_opts.frame_shift_ms / 1000.0f;
   } else {
     KALDI_ERR << "Unknown feature type " << feature_type;
     return 0.0;
