@@ -1,6 +1,6 @@
-// nnet3bin/nnet3-latgen-faster.cc
+// nnet3bin/nnet3-latgen-faster-parallel.cc
 
-// Copyright 2012-2015   Johns Hopkins University (author: Daniel Povey)
+// Copyright 2012-2016   Johns Hopkins University (author: Daniel Povey)
 //                2014   Guoguo Chen
 
 // See ../../COPYING for clarification regarding multiple authors
@@ -19,14 +19,16 @@
 // limitations under the License.
 
 
-#include "base/kaldi-common.h"
-#include "util/common-utils.h"
-#include "tree/context-dep.h"
-#include "hmm/transition-model.h"
-#include "fstext/fstext-lib.h"
-#include "decoder/decoder-wrappers.h"
-#include "nnet3/nnet-am-decodable-simple.h"
 #include "base/timer.h"
+#include "base/kaldi-common.h"
+#include "decoder/decoder-wrappers.h"
+#include "fstext/fstext-lib.h"
+#include "hmm/transition-model.h"
+#include "nnet3/nnet-am-decodable-simple.h"
+#include "thread/kaldi-task-sequence.h"
+#include "tree/context-dep.h"
+#include "util/common-utils.h"
+
 
 
 int main(int argc, char *argv[]) {
@@ -43,11 +45,13 @@ int main(int argc, char *argv[]) {
 
     const char *usage =
         "Generate lattices using nnet3 neural net model.\n"
-        "Usage: nnet3-latgen-faster [options] <nnet-in> <fst-in|fsts-rspecifier> <features-rspecifier>"
+        "Usage: nnet3-latgen-faster-parallel [options] <nnet-in> <fst-in|fsts-rspecifier> <features-rspecifier>"
         " <lattice-wspecifier> [ <words-wspecifier> [<alignments-wspecifier>] ]\n";
     ParseOptions po(usage);
+
     Timer timer;
     bool allow_partial = false;
+    TaskSequencerConfig sequencer_config; // has --num-threads option
     LatticeFasterDecoderConfig config;
     NnetSimpleComputationOptions decodable_opts;
 
@@ -56,9 +60,7 @@ int main(int argc, char *argv[]) {
         online_ivector_rspecifier,
         utt2spk_rspecifier;
     int32 online_ivector_period = 0;
-    std::string use_gpu = "wait";
-    int32 gpu_id = -1;
-
+    sequencer_config.Register(&po);
     config.Register(&po);
     decodable_opts.Register(&po);
     po.Register("word-symbol-table", &word_syms_filename,
@@ -74,9 +76,6 @@ int main(int argc, char *argv[]) {
     po.Register("online-ivector-period", &online_ivector_period, "Number of frames "
                 "between iVectors in matrices supplied to the --online-ivectors "
                 "option");
-    po.Register("use-gpu", &use_gpu,
-                "yes|no|optional|wait, only has effect if compiled with CUDA");
-    po.Register("gpu-id", &gpu_id, "<0 use CPU, 0<= gpu_id <= num_gpus-1 use GPU[gpu_id].");
 
     po.Read(argc, argv);
 
@@ -85,15 +84,6 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
 
-#if HAVE_CUDA==1
-    if (use_gpu == "no" || gpu_id < 0) {
-      CuDevice::Instantiate().SelectGpuId(use_gpu);
-    }
-    else if (gpu_id >= 0) {
-      CuDevice::Instantiate().SelectGpuId(gpu_id);
-    }
-#endif
-
     std::string model_in_filename = po.GetArg(1),
         fst_in_str = po.GetArg(2),
         feature_rspecifier = po.GetArg(3),
@@ -101,6 +91,7 @@ int main(int argc, char *argv[]) {
         words_wspecifier = po.GetOptArg(5),
         alignment_wspecifier = po.GetOptArg(6);
 
+    TaskSequencer<DecodeUtteranceLatticeFasterClass> sequencer(sequencer_config);
     TransitionModel trans_model;
     AmNnetSimple am_nnet;
     {
@@ -135,10 +126,6 @@ int main(int argc, char *argv[]) {
     double tot_like = 0.0;
     kaldi::int64 frame_count = 0;
     int num_success = 0, num_fail = 0;
-    // this compiler object allows caching of computations across
-    // different utterances.
-    CachingOptimizingCompiler compiler(am_nnet.GetNnet(),
-                                       decodable_opts.optimize_config);
 
     if (ClassifyRspecifier(fst_in_str, NULL, NULL) == kNoRspecifier) {
       SequentialBaseFloatMatrixReader feature_reader(feature_rspecifier);
@@ -179,25 +166,29 @@ int main(int argc, char *argv[]) {
             }
           }
 
-          DecodableAmNnetSimple nnet_decodable(
-              decodable_opts, trans_model, am_nnet,
-              features, ivector, online_ivectors,
-              online_ivector_period, &compiler);
+          LatticeFasterDecoder *decoder =
+              new LatticeFasterDecoder(*decode_fst, config);
 
-          double like;
-          if (DecodeUtteranceLatticeFaster(
-                  decoder, nnet_decodable, trans_model, word_syms, utt,
-                  decodable_opts.acoustic_scale, determinize, allow_partial,
-                  &alignment_writer, &words_writer, &compact_lattice_writer,
-                  &lattice_writer,
-                  &like)) {
-            tot_like += like;
-            frame_count += features.NumRows();
-            num_success++;
-          } else num_fail++;
+          DecodableInterface *nnet_decodable = new
+              DecodableAmNnetSimpleParallel(
+                  decodable_opts, trans_model, am_nnet,
+                  features, ivector, online_ivectors,
+                  online_ivector_period);
+
+          DecodeUtteranceLatticeFasterClass *task =
+              new DecodeUtteranceLatticeFasterClass(
+                  decoder, nnet_decodable, // takes ownership of these two.
+                  trans_model, word_syms, utt, decodable_opts.acoustic_scale,
+                  determinize, allow_partial, &alignment_writer, &words_writer,
+                   &compact_lattice_writer, &lattice_writer,
+                   &tot_like, &frame_count, &num_success, &num_fail, NULL);
+
+          sequencer.Run(task); // takes ownership of "task",
+                               // and will delete it when done.
         }
       }
-      delete decode_fst; // delete this only after decoder goes out of scope.
+      sequencer.Wait(); // Waits for all tasks to be done.
+      delete decode_fst;
     } else { // We have different FSTs for different utterances.
       SequentialTableReader<fst::VectorFstHolder> fst_reader(fst_in_str);
       RandomAccessBaseFloatMatrixReader feature_reader(feature_rspecifier);
@@ -215,8 +206,6 @@ int main(int argc, char *argv[]) {
           num_fail++;
           continue;
         }
-
-        LatticeFasterDecoder decoder(fst_reader.Value(), config);
 
         const Matrix<BaseFloat> *online_ivectors = NULL;
         const Vector<BaseFloat> *ivector = NULL;
@@ -239,40 +228,44 @@ int main(int argc, char *argv[]) {
           }
         }
 
-        DecodableAmNnetSimple nnet_decodable(
-            decodable_opts, trans_model, am_nnet,
-            features, ivector, online_ivectors,
-            online_ivector_period, &compiler);
+        LatticeFasterDecoder *decoder =
+            new LatticeFasterDecoder(fst_reader.Value(), config);
 
-        double like;
-        if (DecodeUtteranceLatticeFaster(
-                decoder, nnet_decodable, trans_model, word_syms, utt,
-                decodable_opts.acoustic_scale, determinize, allow_partial,
-                &alignment_writer, &words_writer, &compact_lattice_writer,
-                &lattice_writer, &like)) {
-          tot_like += like;
-          frame_count += features.NumRows();
-          num_success++;
-        } else num_fail++;
+        DecodableInterface *nnet_decodable = new
+            DecodableAmNnetSimpleParallel(
+                decodable_opts, trans_model, am_nnet,
+                features, ivector, online_ivectors,
+                online_ivector_period);
+
+        DecodeUtteranceLatticeFasterClass *task =
+            new DecodeUtteranceLatticeFasterClass(
+                decoder, nnet_decodable, // takes ownership of these two.
+                trans_model, word_syms, utt, decodable_opts.acoustic_scale,
+                determinize, allow_partial, &alignment_writer, &words_writer,
+                &compact_lattice_writer, &lattice_writer,
+                &tot_like, &frame_count, &num_success, &num_fail, NULL);
+
+        sequencer.Run(task); // takes ownership of "task",
+        // and will delete it when done.
       }
+      sequencer.Wait(); // Waits for all tasks to be done.
     }
 
+    kaldi::int64 input_frame_count =
+        frame_count * decodable_opts.frame_subsampling_factor;
+
     double elapsed = timer.Elapsed();
-    KALDI_LOG << "Time taken "<< elapsed
-              << "s: real-time factor assuming 100 frames/sec is "
-              << (elapsed*100.0/frame_count);
+    KALDI_LOG << "Time taken " << elapsed
+              << "s: real-time factor assuming 100 feature frames/sec is "
+              << (sequencer_config.num_threads * elapsed * 100.0 /
+                  input_frame_count);
     KALDI_LOG << "Done " << num_success << " utterances, failed for "
               << num_fail;
-    KALDI_LOG << "Overall log-likelihood per frame is " << (tot_like/frame_count) << " over "
-              << frame_count<<" frames.";
+    KALDI_LOG << "Overall log-likelihood per frame is "
+              << (tot_like / frame_count) << " over "
+              << frame_count << " frames.";
 
     delete word_syms;
-
-#if HAVE_CUDA==1
-    CuDevice::Instantiate().PrintProfile();
-    CuDevice::Instantiate().DeviceReset();
-#endif
-
     if (num_success != 0) return 0;
     else return 1;
   } catch(const std::exception &e) {
