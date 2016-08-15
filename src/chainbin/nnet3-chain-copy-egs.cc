@@ -24,6 +24,8 @@
 #include "nnet3/nnet-chain-example.h"
 
 namespace kaldi {
+namespace nnet3 {
+
 // returns an integer randomly drawn with expected value "expected_count"
 // (will be either floor(expected_count) or ceil(expected_count)).
 int32 GetCount(double expected_count) {
@@ -33,6 +35,21 @@ int32 GetCount(double expected_count) {
   if (WithProb(expected_count))
     ans++;
   return ans;
+}
+
+// add artifical Gaussion noise(mean=0.0, var=gauss_sigma) to the MFCC/Fbank features
+void CorruptsNnetChainExampleGaussNoise(NnetChainExample *eg, BaseFloat sigma) {
+  std::vector<nnet3::NnetIo> &inputs = eg->inputs;
+  for (int32 i = 0; i < inputs.size(); ++i) {
+    GeneralMatrix &features = inputs[i].features;
+    // guass noise
+    Matrix<BaseFloat> m(features.NumRows(), features.NumCols(), kUndefined);
+    m.SetRandn();
+    m.AddMat(1.0, features.GetFullMatrix(), kNoTrans);
+    features = m;
+  }
+}
+
 }
 }
 
@@ -60,6 +77,7 @@ int main(int argc, char *argv[]) {
     int32 frame_shift = 0;
     int32 truncate_deriv_weights = 0;
     BaseFloat keep_proportion = 1.0;
+    BaseFloat gauss_sigma = 0.0;
 
     ParseOptions po(usage);
     po.Register("random", &random, "If true, will write frames to output "
@@ -77,6 +95,9 @@ int main(int argc, char *argv[]) {
     po.Register("truncate-deriv-weights", &truncate_deriv_weights,
                 "If nonzero, the number of initial/final subsample frames that "
                 "will have their derivatives' weights set to zero.");
+    po.Register("gauss-sigma", &gauss_sigma,
+                "If nonzero, add artifical Gaussion noise(mean=0.0, var=gauss_sigma) "
+                "to the MFCC/Fbank features.");
 
     po.Read(argc, argv);
 
@@ -107,7 +128,10 @@ int main(int argc, char *argv[]) {
       int32 count = GetCount(keep_proportion);
       std::string key = example_reader.Key();
       if (frame_shift == 0 && truncate_deriv_weights == 0) {
-        const NnetChainExample &eg = example_reader.Value();
+        NnetChainExample eg = example_reader.Value();
+        if (gauss_sigma != 0) {
+          CorruptsNnetChainExampleGaussNoise(&eg, gauss_sigma);
+        }
         for (int32 c = 0; c < count; c++) {
           int32 index = (random ? Rand() : num_written) % num_outputs;
           example_writers[index]->Write(key, eg);
@@ -115,6 +139,9 @@ int main(int argc, char *argv[]) {
         }
       } else if (count > 0) {
         NnetChainExample eg = example_reader.Value();
+        if (gauss_sigma != 0) {
+          CorruptsNnetChainExampleGaussNoise(&eg, gauss_sigma);
+        }
         if (frame_shift != 0)
           ShiftChainExampleTimes(frame_shift, exclude_names, &eg);
         if (truncate_deriv_weights != 0)
