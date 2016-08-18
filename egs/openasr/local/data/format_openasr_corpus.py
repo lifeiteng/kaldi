@@ -12,7 +12,10 @@ from optparse import OptionParser
 # reversed_time/date/user_id/transaction_id/activity_id_sentence_id.format.pb
 
 def parse_raw_line(line):
-    splits = line.strip().split('/')[-1].replace('.flac.pb.raw', '').replace(".m4a.pb.raw", "").split('__')
+    if line.find('____') >= 0:
+        print "Skip: ", line.strip()
+        return (None, None)
+    splits = line.strip().split('/')[-1].replace('.flac.pb.raw', '').replace(".m4a.pb.raw", "").replace('.flac', '').replace(".m4a", "").split('__')
     # print splits
     if len(splits) != 5:
         print "Error line:", line
@@ -40,7 +43,12 @@ def parse_trans_line(line):
 
 def gen_ffmpeg_command(raw_name, new_wav_name, todir):
     ft = "-ac 1 -ar 16000 -f s16le"
-    cmd = ["ffmpeg -y -loglevel panic", ft, "-i", raw_name,
+    raw_ft = ft
+    if not raw_name.endswith(".raw"):
+        raw_ft = ""
+        ft = "-ac 1 -ar 16000"
+
+    cmd = ["ffmpeg -y -loglevel panic", raw_ft, "-i", raw_name,
            ft, todir + '/' + new_wav_name + ' </dev/null']
     return ' '.join(cmd)
 
@@ -61,21 +69,22 @@ def run(raws_file, trans_file, raw_todir, doc_todir, count=False):
             if not speaker:
                 continue
             if speaker not in speaker_raws:
-                speaker_raws[speaker] = []
+                speaker_raws[speaker] = {}
                 if not os.path.isdir(raw_todir + '/' + speaker):
                     os.mkdir(raw_todir + '/' + speaker)
-            if speaker_raws[speaker].count(new_wav_file) != 0:
+            if speaker_raws[speaker].has_key(new_wav_file):
                 repeated_raws += 1
                 print "Repeated(discard reversed_time) raw file:", new_wav_file
                 continue
             raws_new_files.add(new_wav_file)
             speaker_raws[speaker][new_wav_file] = gen_ffmpeg_command(line, new_wav_file, raw_todir + '/' + speaker)
     print "Discard reversed_time: %d repeated raws" % repeated_raws
+    changed_trans = set()
     with open(trans_file) as tf:
         for line in tf:
             line = line.strip()
             (new_wav_file, transcription) = parse_trans_line(line)
-            if not new_wav_file:
+            if not new_wav_file or new_wav_file in changed_trans:
                 continue
             if new_wav_file in speaker_trans:
                 repeated_trans += 1
@@ -83,7 +92,8 @@ def run(raws_file, trans_file, raw_todir, doc_todir, count=False):
                 if speaker_trans[new_wav_file] != transcription:
                     print "WTFFF: reversed_time?: ", line
                     print "[%s] vs [%s]" % (speaker_trans[new_wav_file], transcription)
-                    exit(-1)
+                    changed_trans.add(new_wav_file)
+                    speaker_trans.pop(new_wav_file, None)
                 continue
             speaker_trans[new_wav_file] = transcription
 
@@ -110,7 +120,7 @@ def run(raws_file, trans_file, raw_todir, doc_todir, count=False):
 if __name__ == "__main__":
     usage = '%prog [options] raw.find trans.txt wav_data_dir doc_dir '
     parser = OptionParser(usage)
-    parser.add_option('--count', dest='count', default=False)
+    parser.add_option('--count', dest='count', default=False, help="Just count numbers, don't write cmds.")
     (opt, argv) = parser.parse_args()
 
     if len(argv) != 4:

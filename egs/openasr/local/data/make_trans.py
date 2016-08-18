@@ -49,7 +49,7 @@ def FixTrans(in_trans_file, out_trans_file):
 
 
 class MakeTrans:
-    def __init__(self, postfix, in_flist, input_snr, out_txt, out_scp, utt2spk):
+    def __init__(self, postfix, in_flist, input_snr, out_txt, out_scp, utt2spk, user_filter=''):
         self.SpknameDict = dict()
         self.trans = dict()
 
@@ -59,6 +59,12 @@ class MakeTrans:
         self.text = open(out_txt, 'w')
         self.wavscp = open(out_scp, 'w')
         self.utt2spk = open(utt2spk, 'w')
+        self.user_filter = set()
+        if user_filter != ''  and os.path.isfile(user_filter):
+            with open(user_filter, 'r') as f:
+                for line in f:
+                    self.user_filter.add(line.strip())
+
         self.ParseTrans(input_snr)
         self.ProcessAllInOne()
 
@@ -87,6 +93,9 @@ class MakeTrans:
             wavname = self.GetWavName(line)
             sp = wavname.split("_")
             spkname = sp[0]
+            if spkname in self.user_filter:  # filter test sets
+                print "Skip speaker:", spkname
+                continue
 
             key = wavname.replace('.wav', '') # 音频文件名
             if corpus_type == 'voxpop': # voxpop key修改为固定长度的hash string
@@ -126,6 +135,7 @@ if __name__ == "__main__":
     parser = OptionParser(usage)
     parser.add_option('--fix-trans', dest='fix_trans', default=False)
     parser.add_option('--corpus', dest='corpus', default='')
+    parser.add_option('--user-filter', dest='user_filter', default='')
     (opt, argv) = parser.parse_args()
 
     if opt.fix_trans == 'True':
@@ -140,7 +150,7 @@ if __name__ == "__main__":
         if corpus_type not in corpus_types:
             print "Error corpus type, must be one of", corpus_types
             exit(-1)
-        MakeTrans(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5])
+        MakeTrans(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], user_filter=opt.user_filter)
     print __file__, " Done. "
 
 
