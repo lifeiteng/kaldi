@@ -105,12 +105,17 @@ class MakeTrans:
             key = key + '_' + self.postfix
 
             if self.trans.has_key(wavname):
+                wav_file = self.wavlist[i].strip()
+                sz = os.path.getsize(wav_file)
+                if sz <= 100:
+                    print "Too Small Filesize:", sz, wav_file
+                    continue
                 if not utt2spk.has_key(spkname):
                     utt2spk[spkname] = []
                 utt2spk[spkname].append(key)
 
                 print >> self.text, "%s %s" %(key, self.trans[wavname])
-                print >> self.wavscp, "%s %s" %(key, self.wavlist[i].strip())
+                print >> self.wavscp, "%s %s" %(key, wav_file)
             else:
                 no_tsp_num += 1
                 print "WARNING: No trans for utt: %s" %(wavname)
