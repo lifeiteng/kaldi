@@ -18,6 +18,7 @@ try:
     import matplotlib as mpl
     mpl.use('Agg')
     import matplotlib.pyplot as plt
+    import seaborn as sns
     from matplotlib.backends.backend_pdf import PdfPages
     import numpy as np
 
@@ -54,12 +55,12 @@ example : steps/nnet3/report/generate_plots.py --comparison-dir exp/nnet3/tdnn1 
     parser.add_argument("output_dir", help="experiment directory, e.g. exp/nnet3/tdnn/report")
 
     args = parser.parse_args()
-    if args.comparison_dir is not None and len(args.comparison_dir) > 6:
-        raise Exception("max 6 --comparison-dir options can be specified. If you want to compare with more comparison_dir, you would have to carefully tune the plot_colors variable which specified colors used for plotting.")
+    if args.comparison_dir is not None and len(args.comparison_dir) > 10:
+        raise Exception("max 10 --comparison-dir options can be specified. If you want to compare with more comparison_dir, you would have to carefully tune the plot_colors variable which specified colors used for plotting.")
     assert(args.start_iter >= 1)
     return args
 
-plot_colors = ['red', 'blue', 'green', 'black', 'magenta', 'yellow', 'cyan' ]
+plot_colors = sns.color_palette("hls", 10)
 
 
 
@@ -144,7 +145,7 @@ def GenerateAccuracyPlots(exp_dir, output_dir, plot, key = 'accuracy', file_base
     if plot:
         plt.xlabel('Iteration')
         plt.ylabel(key)
-        lgd = plt.legend(handles=plots, loc='lower center', bbox_to_anchor=(0.5, -0.2 + len(dirs) * -0.1 ), ncol=1, borderaxespad=0.)
+        lgd = plt.legend(plots, loc='lower center', bbox_to_anchor=(0.5, -0.2 + len(dirs) * -0.1 ), ncol=1, borderaxespad=0.)
         plt.grid(True)
         fig.suptitle("{0} plot".format(key))
         figfile_name = '{0}/{1}.png'.format(output_dir, file_basename)
