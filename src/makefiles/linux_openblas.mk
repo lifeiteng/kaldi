@@ -22,7 +22,7 @@ CXXFLAGS = -msse -msse2 -Wall -I.. \
       -DHAVE_OPENBLAS -I $(OPENBLASROOT)/include \
       -I $(FSTROOT)/include \
       $(EXTRA_CXXFLAGS) \
-      -g # -O0 -DKALDI_PARANOID 
+      -g -O3 -DKALDI_PARANOID
 
 ifeq ($(KALDI_FLAVOR), dynamic)
 CXXFLAGS += -fPIC

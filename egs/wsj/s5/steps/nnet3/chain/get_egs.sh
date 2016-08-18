@@ -158,12 +158,12 @@ if [ $stage -le 0 ] && [ -f $data/utt2uniq ]; then  # this matters if you use da
     sort | uniq | utils/apply_map.pl $dir/uniq2utt | \
     awk '{for(n=1;n<=NF;n++) print $n;}' | sort  > $dir/valid_uttlist
   rm $dir/uniq2utt $dir/valid_uttlist.tmp
-
-  cat $data/utt2dur | \
-    awk -v min_len=$frames_per_eg -v fs=$frame_shift '{if ($2 * 1/fs >= min_len) print $1}' | \
-     utils/filter_scp.pl --exclude $dir/valid_uttlist | \
-     utils/shuffle_list.pl | head -$num_utts_subset > $dir/train_subset_uttlist || exit 1;
 fi
+
+cat $data/utt2dur | \
+  awk -v min_len=$frames_per_eg -v fs=$frame_shift '{if ($2 * 1/fs >= min_len) print $1}' | \
+   utils/filter_scp.pl --exclude $dir/valid_uttlist | \
+   utils/shuffle_list.pl | head -$num_utts_subset > $dir/train_subset_uttlist || exit 1;
 
 len_uttlist=`wc -l $dir/train_subset_uttlist | awk '{print $1}'`
 if [ $len_uttlist -lt $num_utts_subset ]; then
@@ -288,7 +288,7 @@ fi
 if [ $stage -le 2 ]; then
   echo "$0: copying training lattices"
 
-  $cmd --max-jobs-run 6 JOB=1:$num_lat_jobs $dir/log/lattice_copy.JOB.log \
+  $cmd --max-jobs-run 10 JOB=1:$num_lat_jobs $dir/log/lattice_copy.JOB.log \
     lattice-copy "ark:gunzip -c $latdir/lat.JOB.gz|" ark,scp:$dir/lat.JOB.ark,$dir/lat.JOB.scp || exit 1;
 
   for id in $(seq $num_lat_jobs); do cat $dir/lat.$id.scp; done > $dir/lat.scp
@@ -443,5 +443,7 @@ if [ $stage -le 6 ]; then
   rm $dir/{ali,trans}.{ark,scp} 2>/dev/null
 
 fi
+
+touch $dir/.done
 
 echo "$0: Finished preparing training examples"

@@ -4,3 +4,5 @@ export PATH=$KALDI_ROOT/tools/sph2pipe_v2.5:$PWD/utils/:$KALDI_ROOT/src/bin:$KAL
 export LC_ALL=C
 export IRSTLM=$KALDI_ROOT/tools/irstlm
 export PATH=$KALDI_ROOT/tools/srilm/bin:$KALDI_ROOT/tools/srilm/bin/i686-m64:$PATH
+export OPENBLAS_NUM_THREADS=2
+

@@ -8,7 +8,7 @@ ctx_opts=
 
 decode_sets="forum non-native native"
 decode_iter="final"
-decode_suff=""
+decode_suffix=""
 
 decode_opts=""
 scoring_opts=""
@@ -41,7 +41,7 @@ fi
 
 dir=$1
 
-if [ $stage -le 1 ]; then
+if [[ $stage -le 1 && ! -d ${dir}_online/conf ]]; then
     steps/online/nnet3/prepare_online_decoding.sh $online_cmvn_opts $ctx_opts --iter $decode_iter $feat_config \
         $data/lang $dir ${dir}_online || exit 1;
 fi
@@ -59,7 +59,7 @@ if [ $stage -le 2 ]; then
     for decode_set in $decode_sets; do
         steps/online/nnet3/decode.sh $decode_opts --scoring-opts "$scoring_opts" \
             --nj $decode_nj --cmd "$decode_cmd" $iter_opts --config conf/decode_online.config \
-            $graph_dir $data/${decode_set} ${dir}_online/decode_${decode_iter}_${decode_set}${decode_suff} || exit 1;
+            $graph_dir $data/${decode_set} ${dir}_online/decode_${decode_iter}_${decode_set}${decode_suffix} || exit 1;
 
         # steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" \
         #     data/lang_sw1_{tg,fsh_fg} data/${decode_set}_hires \

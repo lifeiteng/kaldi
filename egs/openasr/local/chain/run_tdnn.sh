@@ -53,7 +53,7 @@ cmvn_opts="--norm-means=true --norm-vars=true"
 train_set=train
 exit_stage=
 
-dir=exp/chain/tdnn
+dir=
 graph_dir=
 
 decode_sets="forum non-native native"
@@ -68,6 +68,8 @@ decode_opts=
 
 online_cmvn=true
 skip_decode=true
+skip_train=false
+
 egs_opts=
 nnet_jobs=3
 extra_egs_dirs=
@@ -89,8 +91,9 @@ where "nvcc" is installed.
 EOF
 fi
 
-dir=${dir}$suffix
-mkdir -p $dir/egs
+if [ -z $dir ];then
+  dir=exp/chain/tdnn$suffix
+fi
 
 if [ -z $tree_dir ];then
   tree_dir=exp/chain/tri3_tree_${TreeLeaves}$tree_suffix
@@ -99,7 +102,6 @@ fi
 
 data=data_fbank_hires
 src_model=exp/tri3
-lats_dir=exp/tri3_all_lats
 
 ali_dir=exp/tri3_all_ali
 
@@ -168,8 +170,9 @@ fi
 # if [ -z $common_egs_dir ]; then
 #   mkdir -p $dir/egs
 #   if [ $stage -le 11 ];then
-#     steps/nnet3/chain/train_get_egs.py --stage -4 \
+#     steps/nnet3/chain/train_get_egs.py --stage -10 \
 #       --cmd "$decode_cmd" \
+#       --chain.lm-opts="--num-extra-lm-states=2000" \
 #       --feat.cmvn-opts "$cmvn_opts" \
 #       --chain.frame-subsampling-factor $frame_subsampling_factor \
 #       --chain.alignment-subsampling-factor $frame_subsampling_factor \
@@ -192,8 +195,15 @@ fi
 #     fi
 #     common_egs_dir=$dir/egs_combine
 #   else
-#     common_egs_dir=$dir/egs
+#     if [ -f $dir/egs/.done ];then
+#       common_egs_dir=$dir/egs
+#     fi
 #   fi
+# fi
+
+# if $skip_train;then
+#   echo "Skip Training."
+#   exit 0;
 # fi
 
 if [ $stage -le 12 ]; then
@@ -201,6 +211,7 @@ if [ $stage -le 12 ]; then
     utils/create_split_dir.pl \
      /export/b0{5,6,7,8}/$USER/kaldi-data/egs/ami-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
   fi
+  mkdir -p $dir/egs
   touch $dir/egs/.nodelete # keep egs around when that run dies.
   mkdir -p $dir/log
   # --feat.online-ivector-dir "$ivector_dir" \
