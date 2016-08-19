@@ -27,31 +27,60 @@ logger.info('Starting chain train_get_egs.py')
 def GetArgs():
     usage = '%prog egs-dir-1 egs-dir-2 egs-dir-3 combined-egs-dir'
     parser = OptionParser(usage)
-    parser.add_option('--random', dest='random', action='store_false', default=True)
+    parser.add_option('--sort', dest='sort', action='store_true', default=False)
+    parser.add_option('--random-seed', dest='seed', type=int, default=None)
+    parser.add_option('--percent', dest='percent', type=str, default="")
     parser.add_option('-C', '--copy', dest='copy', action='store_true', default=False)
     (opt, args) = parser.parse_args()
     assert len(args) >= 2
+    if opt.seed:
+        random.seed(opt.seed)
+
     return [args, opt]
 
 # args is a Namespace with the required parameters
 def Combine(args, opt):
     logger.info("Combining egs")
     num_archives = []
+    num_archives_choosed = []
     for egs_dir in args[:-1]:
         num_archive = len([ egs for egs in os.listdir(egs_dir) if egs.endswith('.ark')])
         assert num_archive > 0
         num_archives.append(num_archive)
+        num_archives_choosed.append([random.random() for i in range(num_archive)])
+
     combine_egs_dir = args[-1]
     if not os.path.isdir(combine_egs_dir):
         os.mkdir(combine_egs_dir)
-    logger.info("[ %s ] egs -> %d egs" % (' '.join([ str(v) for v in num_archives]), sum(num_archives)))
     combine_numbers = range(1, sum(num_archives) + 1)
-    if opt.random:
+    percents = None
+    if opt.percent:
+        logger.info("Percent: %s" % (opt.percent))
+        percents = [float(v) for v in opt.percent.split()]
+        assert len(percents) == len(num_archives)
+        assert len(percents) == len(num_archives_choosed)
+        num_final_egs = 0
+        for i in range(0, len(num_archives)):
+            num_final_egs += sum([ v <= percents[i] for v in num_archives_choosed[i]])
+
+        combine_numbers = range(1, num_final_egs + 1)
+        if len(combine_numbers) == 0:
+            logger.error("bad percent %s" % (opt.percent))
+            exit(-1)
+
+    max_egs_num = combine_numbers[-1]
+    logger.info("[ %s ] egs -> %d egs" % (' '.join([str(v) for v in num_archives]), max_egs_num))
+
+    if not opt.sort:
         random.shuffle(combine_numbers)
+    logger.info("[ %s ]" % (' '.join([str(v) for v in combine_numbers])))
+
     for e in range(0, len(args[:-1])):
         for i in range(1, num_archives[e] + 1):
-            aidx = random.choice(combine_numbers)
-            combine_numbers.remove(aidx)
+            if percents:
+                if num_archives_choosed[e][i-1] > percents[e]:
+                    continue
+            aidx = combine_numbers.pop()
             if args[e].find('combine') < 0 or opt.copy:
                 shutil.copy("{0}/cegs.{1}.ark".format(args[e], i), "{0}/cegs.{1}.ark".format(combine_egs_dir, aidx))
             else:
