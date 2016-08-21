@@ -73,7 +73,9 @@ def Combine(args, opt):
 
     if not opt.sort:
         random.shuffle(combine_numbers)
-    logger.info("[ %s ]" % (' '.join([str(v) for v in combine_numbers])))
+    else:
+        combine_numbers.reverse()
+    # logger.info("[ %s ]" % (' '.join([str(v) for v in combine_numbers])))
 
     for e in range(0, len(args[:-1])):
         for i in range(1, num_archives[e] + 1):
@@ -81,6 +83,7 @@ def Combine(args, opt):
                 if num_archives_choosed[e][i-1] > percents[e]:
                     continue
             aidx = combine_numbers.pop()
+            logger.info("Move/Copy {0}/cegs.{1}.ark -> {2}/cegs.{3}.ark".format(args[e], i, combine_egs_dir, aidx))
             if args[e].find('combine') < 0 or opt.copy:
                 shutil.copy("{0}/cegs.{1}.ark".format(args[e], i), "{0}/cegs.{1}.ark".format(combine_egs_dir, aidx))
             else:
