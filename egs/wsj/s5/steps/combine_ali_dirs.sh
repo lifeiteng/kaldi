@@ -31,7 +31,13 @@ dest=$1;
 shift;
 first_src=$1;
 
+if [ ! -f $data/spk2utt ];then
+  echo "$0: no file $data/spk2utt (error usage?)"
+  exit 1;
+fi
+
 mkdir -p $dest;
+
 rm $dest/{ali.*.gz,num_jobs} 2>/dev/null
 
 export LC_ALL=C

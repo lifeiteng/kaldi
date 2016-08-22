@@ -412,6 +412,11 @@ def TrainNewModels(dir, iter, srand, num_jobs, num_archives_processed, num_archi
             archive_index = (k % num_archives) + 1 # work out the 1-based archive index.
             frame_shift = (archive_index + k/num_archives) % frame_subsampling_factor
             # previous : frame_shift = (k/num_archives) % frame_subsampling_factor
+            gpu_info = ""
+            if int(i) >= 0:
+                gpu_info = " --gpu-id=" + str(i)
+            else:
+                gpu_info = "--use-gpu=wait"
             if job == 1:
                 cur_cache_io_opts = cache_io_opts + " --write-cache={dir}/cache.{next_iter}".format(dir = dir, next_iter = iter + 1)
             else:
@@ -436,7 +441,7 @@ def TrainNewModels(dir, iter, srand, num_jobs, num_archives_processed, num_archi
                      app_deriv_wts = apply_deriv_weights,
                      fr_shft = frame_shift, l2 = l2_regularize,
                      xent_reg = xent_regularize, leaky = leaky_hmm_coefficient,
-                     parallel_train_opts = run_opts.parallel_train_opts + " --gpu-id=" + str(i),
+                     parallel_train_opts = run_opts.parallel_train_opts + gpu_info,
                      momentum = momentum, max_param_change = max_param_change,
                      raw_model = raw_model_string,
                      egs_dir = egs_dir, archive_index = archive_index,
