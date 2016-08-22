@@ -35,48 +35,47 @@ if [ $stage -le -2 ];then
     echo ============================================================================
     echo "                Data & Lexicon & Language Preparation                     "
     echo ============================================================================
-    # echo "======== 处理数据集 voxpop TED openasr-data-01 ========"
-    # local/std_prepare_data.sh --train true --test true --corpus "voxpop" --data data/voxpop /data/voxpop
-    # (
-    #     ted=/home/feiteng/kaldi-trunk/egs/tedlium/s5/data
-    #     mkdir -p data/tedlium
-    #     cp -r $ted/{train,test,dev} data/tedlium
-    #     for x in train test dev;do
-    #         # [ ! -f data/tedlium/$x/text.back ] && cp data/tedlium/$x/text data/tedlium/$x/test.back
-    #         awk '{k=$1; $1=""; t=tolower($0); print k, t;}' $ted/$x/text>data/tedlium/$x/text
-    #     done
-    # )
-    # local/std_prepare_data.sh --train true --corpus "openasr" --data data/openasr-01 /data/openasr-data-01 
-    
-    # # ted=/home/feiteng/kaldi-trunk/egs/tedlium/s5/data
-    # (
-    #     echo "========  准备发音词典  ========"
-    #     rm -rf data/local/dict
-    #     mkdir -p data/local/dict
-    #     cat /data/dictionary/{TEDLIUM.150K.dic,9001.dict} >data/local/dict/lexicon_9001_ted.txt
-    #     local/openasr_prepare_dict.sh --data data --phoneset 9000 data/local/dict/lexicon_9001_ted.txt || exit 1;
-    # )
-    
-    # echo "========  准备langs    ========"
-    # # Prepare $${lang} and $data/local/lang directories
-    # utils/prepare_lang.sh --share-silence-phones true --num-sil-states 3 --position-dependent-phones false \
-    #     data/local/dict '!SIL' data/local/lang_tmp data/lang || exit 1;
+    echo "======== 处理数据集 voxpop TED openasr-data-01 ========"
+    local/data/std_prepare_data.sh --train true --test true --corpus "voxpop" --data data/voxpop /data/voxpop
+    (
+        ted=/home/feiteng/kaldi-trunk/egs/tedlium/s5/data
+        mkdir -p data/tedlium
+        cp -r $ted/{train,test,dev} data/tedlium
+        for x in train test dev;do
+            # [ ! -f data/tedlium/$x/text.back ] && cp data/tedlium/$x/text data/tedlium/$x/test.back
+            awk '{k=$1; $1=""; t=tolower($0); print k, t;}' $ted/$x/text>data/tedlium/$x/text
+        done
+    )
+    local/data/std_prepare_data.sh --train true --corpus "openasr" --data data/openasr-01 /data/openasr-data-01 
 
-    # echo "========  数据清洗     ========"
-    # dict=data/local/dict/lexicon.txt
-    # for x in voxpop tedlium openasr-01;do
-    #     for y in train test dev;do
-    #         [ ! -d data/$x/$y ] && continue
-    #         echo "Process data/$x/$y/text..."
-    #         # cp data/$x/$y/.backup/text data/$x/$y/text || exit 1;
-    #         # wc -l data/$x/$y/text
-    #         cp data/$x/$y/text data/$x/$y/text.t
-    #         local/clean_trans.py --lower True --clean-oov True $dict data/$x/$y/text.t data/$x/$y/text || exit 1;
-    #         # cp data/$x/$y/text.t data/$x/$y/text
-    #         utils/fix_data_dir.sh data/$x/$y
-    #         echo "======"
-    #     done
-    # done
+    # ted=/home/feiteng/kaldi-trunk/egs/tedlium/s5/data
+    (
+        echo "========  准备发音词典  ========"
+        rm -rf data/local/dict
+        mkdir -p data/local/dict
+        cat /data/dictionary/{TEDLIUM.150K.dic,9001.dict} >data/local/dict/lexicon_9001_ted.txt
+        local/data/openasr_prepare_dict.sh --data data --phoneset 9000 data/local/dict/lexicon_9001_ted.txt || exit 1;
+    )
+    
+    echo "========  准备langs    ========"
+    # Prepare $${lang} and $data/local/lang directories
+    utils/prepare_lang.sh --share-silence-phones true --num-sil-states 3 --position-dependent-phones false \
+        data/local/dict '!SIL' data/local/lang_tmp data/lang || exit 1;
+
+    echo "========  数据清洗     ========"
+    dict=data/local/dict/lexicon.txt
+    for x in voxpop tedlium openasr-01;do
+        for y in train test dev;do
+            [ ! -d data/$x/$y ] && continue
+            echo "Process data/$x/$y/text..."
+            # cp data/$x/$y/.backup/text data/$x/$y/text || exit 1;
+            # wc -l data/$x/$y/text
+            cp data/$x/$y/text data/$x/$y/text.t
+            local/data/lean_trans.py --lower True --clean-oov True $dict data/$x/$y/text.t data/$x/$y/text || exit 1;
+            utils/fix_data_dir.sh data/$x/$y
+            echo "======"
+        done
+    done
     # exit 1;
 
     # # echo "========  准备语言模型  ========"
@@ -85,7 +84,7 @@ if [ $stage -le -2 ];then
     # echo "========  format data ========"
     # local/std_format_data.sh --data data --lm-suffix "translm_tg" data/local/lm/trans_lm_3.arpa || exit 1;
     local/openasr_format_data.sh --data data --lm-suffix "biglm_tg" /data/LM/interp_lm.prune-8 || exit 1 &
-    exit 1;
+
     # (
     # echo "======== 统计 duration ========"
     # # for x in voxpop tedlium openasr-01;do
@@ -102,31 +101,31 @@ if [ $stage -le -2 ];then
     # done
     # ) &
 
-    # # for x in voxpop tedlium openasr-01;do
-    # for x in openasr-01;do
-    #     for y in train test dev;do
-    #         [ ! -d data/$x/$y ] && continue
-    #         echo "Process data/$x/$y ..."
-    #         # grep -v -f local/users.filter.base64 data/$x/$y/text >tmp/text || exit 1;
-    #         # mv tmp/text data/$x/$y/text || exit 1;
-    #         utils/fix_data_dir.sh data/$x/$y || exit 1;
-    #         echo ============================================================================
-    #         echo "        Fbank Feature Extration & CMVN for Training and Test set on"  `date`
-    #         echo ============================================================================
+    # for x in voxpop tedlium openasr-01;do
+    for x in openasr-01;do
+        for y in train test dev;do
+            [ ! -d data/$x/$y ] && continue
+            echo "Process data/$x/$y ..."
+            # grep -v -f local/users.filter.base64 data/$x/$y/text >tmp/text || exit 1;
+            # mv tmp/text data/$x/$y/text || exit 1;
+            utils/fix_data_dir.sh data/$x/$y || exit 1;
+            echo ============================================================================
+            echo "        Fbank Feature Extration & CMVN for Training and Test set on"  `date`
+            echo ============================================================================
 
-    #         featdir=fbank40
-    #         steps/make_fbank.sh --nj $nj --cmd "run.pl" data/$x/$y exp/make_feat_${x}_fbank/$y data/$x/$featdir || exit 1;
-    #         steps/compute_cmvn_stats.sh data/$x/$y exp/make_feat_${x}_fbank/$y data/$x/$featdir || exit 1;
+            featdir=fbank40
+            steps/make_fbank.sh --nj $nj --cmd "run.pl" data/$x/$y exp/make_feat_${x}_fbank/$y data/$x/$featdir || exit 1;
+            steps/compute_cmvn_stats.sh data/$x/$y exp/make_feat_${x}_fbank/$y data/$x/$featdir || exit 1;
 
-    #         echo ============================================================================
-    #         echo "        MFCC Feature Extration & CMVN for Training and Test set on"  `date`
-    #         echo ============================================================================
+            echo ============================================================================
+            echo "        MFCC Feature Extration & CMVN for Training and Test set on"  `date`
+            echo ============================================================================
 
-    #         featdir=mfcc24
-    #         steps/make_mfcc.sh --nj $nj --cmd "run.pl" data/$x/$y exp/make_feat_$x_mfcc/$y data/$x/$featdir || exit 1;
-    #         steps/compute_cmvn_stats.sh data/$x/$y exp/make_feat_$x_mfcc/$y data/$x/$featdir || exit 1;
-    #     done
-    # done
+            featdir=mfcc24
+            steps/make_mfcc.sh --nj $nj --cmd "run.pl" data/$x/$y exp/make_feat_$x_mfcc/$y data/$x/$featdir || exit 1;
+            steps/compute_cmvn_stats.sh data/$x/$y exp/make_feat_$x_mfcc/$y data/$x/$featdir || exit 1;
+        done
+    done
    
     # echo "======== 分配数据集 500hours 1500hours ========"
     # for x in voxpop tedlium openasr-01;do
@@ -245,14 +244,14 @@ if [ $stage -le 0 ];then
     echo "                     MonoPhone Training & Decoding             on"  `date`
     echo ============================================================================
     # rm -rf $data/train.50k
-    # utils/subset_data_dir.sh $data/train 50000 $data/train.50k || exit 1;
-    # utils/fix_data_dir.sh $data/train.50k
+    utils/subset_data_dir.sh $data/train 50000 $data/train.50k || exit 1;
+    utils/fix_data_dir.sh $data/train.50k
 
     steps/train_mono.sh  --nj "$train_nj" --cmd "$train_cmd" $data/train.50k $data/lang exp/mono
     (
-    utils/mkgraph.sh --mono $lang exp/mono exp/mono/${graph_dir}
-    steps/decode.sh --config conf/decode.config --nj "$decode_nj" --cmd "$decode_cmd" \
-     exp/mono/${graph_dir} $data/test exp/mono/${decode_dir}
+        utils/mkgraph.sh --mono $lang exp/mono exp/mono/${graph_dir}
+        steps/decode.sh --config conf/decode.config --nj "$decode_nj" --cmd "$decode_cmd" \
+         exp/mono/${graph_dir} $data/test exp/mono/${decode_dir}
     )&
 fi
 
@@ -261,16 +260,16 @@ if [ $stage -le 1 ];then
     echo ============================================================================
     echo "           tri1 : Deltas + Delta-Deltas Training & Decoding    on"  `date`
     echo ============================================================================
-    # steps/align_si.sh --nj "$train_nj" --cmd "$train_cmd" \
-    #  $data/train $data/lang exp/mono exp/mono_ali
+    steps/align_si.sh --nj "$train_nj" --cmd "$train_cmd" \
+     $data/train $data/lang exp/mono exp/mono_ali
 
     # Train tri1, which is deltas + delta-deltas, on train data.
     steps/train_deltas.sh --cmd "$train_cmd" --stage 32 \
-     $numLeavesTri1 $numGaussTri1 $data/train $data/lang exp/mono_ali exp/tri1
+        $numLeavesTri1 $numGaussTri1 $data/train $data/lang exp/mono_ali exp/tri1
     (
-    utils/mkgraph.sh $lang exp/tri1 exp/tri1/${graph_dir}
-    steps/decode.sh --config conf/decode.config --nj "$decode_nj" --cmd "$decode_cmd" \
-     exp/tri1/${graph_dir} $data/test exp/tri1/${decode_dir}
+        utils/mkgraph.sh $lang exp/tri1 exp/tri1/${graph_dir}
+        steps/decode.sh --config conf/decode.config --nj "$decode_nj" --cmd "$decode_cmd" \
+         exp/tri1/${graph_dir} $data/test exp/tri1/${decode_dir}
     )&
 fi
 
@@ -280,16 +279,16 @@ if [ $stage -le 2 ];then
     echo "                 tri2 : LDA + MLLT Training & Decoding          on"  `date`
     echo ============================================================================
 
-    # steps/align_si.sh --retry-beam 15 --nj "$train_nj" --cmd "$train_cmd" \
-    #   $data/train $data/lang exp/tri1 exp/tri1_ali
+    steps/align_si.sh --retry-beam 15 --nj "$train_nj" --cmd "$train_cmd" \
+      $data/train $data/lang exp/tri1 exp/tri1_ali
 
     steps/train_lda_mllt.sh --cmd "$train_cmd" --stage ${train_stage} \
-     --splice-opts "--left-context=3 --right-context=3" \
-     $numLeavesMLLT $numGaussMLLT $data/train $data/lang exp/tri1_ali exp/tri2
+        --splice-opts "--left-context=3 --right-context=3" \
+        $numLeavesMLLT $numGaussMLLT $data/train $data/lang exp/tri1_ali exp/tri2
     (
-    utils/mkgraph.sh $lang exp/tri2 exp/tri2/${graph_dir}
-    steps/decode.sh --nj "$decode_nj" --cmd "$decode_cmd" \
-     exp/tri2/${graph_dir} $data/test exp/tri2/${decode_dir}
+        utils/mkgraph.sh $lang exp/tri2 exp/tri2/${graph_dir}
+        steps/decode.sh --nj "$decode_nj" --cmd "$decode_cmd" \
+         exp/tri2/${graph_dir} $data/test exp/tri2/${decode_dir}
     )&
 
     # Align tri2 system with train data.
@@ -304,17 +303,17 @@ if [ $stage -le 3 ];then
     echo ============================================================================
 
     steps/train_lda_mllt.sh --cmd "$train_cmd" \
-     --splice-opts "--left-context=3 --right-context=3" \
-     $numLeavesMLLTb $numGaussMLLTb $data/train $data/lang exp/tri1_ali exp/tri2b
+        --splice-opts "--left-context=3 --right-context=3" \
+        $numLeavesMLLTb $numGaussMLLTb $data/train $data/lang exp/tri1_ali exp/tri2b
     (
-    utils/mkgraph.sh $lang exp/tri2b exp/tri2b/${graph_dir}
-    steps/decode.sh --nj "$decode_nj" --cmd "$decode_cmd" \
-     exp/tri2b/${graph_dir} $data/test exp/tri2b/${decode_dir}
+        utils/mkgraph.sh $lang exp/tri2b exp/tri2b/${graph_dir}
+        steps/decode.sh --nj "$decode_nj" --cmd "$decode_cmd" \
+         exp/tri2b/${graph_dir} $data/test exp/tri2b/${decode_dir}
     )&
 
     # Align tri2 system with train data.
     steps/align_si.sh --retry-beam 12 --nj "$train_nj" --cmd "$train_cmd" \
-     --use-graphs false $data/train_all $data/lang exp/tri2b exp/tri2b_all_ali
+        --use-graphs false $data/train_all $data/lang exp/tri2b exp/tri2b_all_ali
 fi
 
 
@@ -324,26 +323,21 @@ if [ $stage -le 6 ];then
     echo ============================================================================
 
     # Align tri2 system with train data.
-    # ///////////////////////////////// commented by yxf
-    #steps/align_si.sh --retry-beam 12 --nj "$train_nj" --cmd "$train_cmd" \
-    # --use-graphs true $data/train $data/lang exp/tri2 exp/tri2_ali
+    steps/align_si.sh --retry-beam 12 --nj "$train_nj" --cmd "$train_cmd" \
+        --use-graphs true $data/train $data/lang exp/tri2 exp/tri2_ali
 
     # From tri2 system, train tri3 which is LDA + MLLT + SAT.
-    steps/train_sat.sh --cmd "$train_cmd"  --stage 25 \
+    steps/train_sat.sh --cmd "$train_cmd"  --stage 0 \
      $numLeavesSAT $numGaussSAT $data/train $data/lang exp/tri2_ali exp/tri3
     (
-    utils/mkgraph.sh $lang exp/tri3 exp/tri3/${graph_dir}
-    steps/decode_fmllr.sh --nj "$decode_nj" --cmd "$decode_cmd" \
-     exp/tri3/${graph_dir} $data/test exp/tri3/${decode_dir}
+        utils/mkgraph.sh $lang exp/tri3 exp/tri3/${graph_dir}
+        steps/decode_fmllr.sh --nj "$decode_nj" --cmd "$decode_cmd" \
+         exp/tri3/${graph_dir} $data/test exp/tri3/${decode_dir}
     )&
 
     steps/align_fmllr.sh --retry-beam 12 --nj "$train_nj" --cmd "$train_cmd" \
      $data/train_all $data/lang exp/tri3 exp/tri3_all_ali
 fi
-
-# bash RESULTS test
-
-# bash go.sh
 
 if [ $stage -le 8 ];then
     echo ============================================================================
@@ -354,6 +348,36 @@ if [ $stage -le 8 ];then
     steps/align_si.sh --careful true --scale-opts "--transition-scale=1.0 --acoustic-scale=1 --self-loop-scale=0.1" \
       --beam 16 --retry-beam 20 --nj "$train_nj" --cmd "$train_cmd" \
       --use-graphs false $data/train_all $data/lang exp/tri2b exp/tri2b_aw1_all_ali
+fi
+
+if [ $stage -le 10 ];then
+    echo ============================================================================
+    echo "                     Probablistic Lexical Model                 on"  `date`
+    echo ============================================================================
+    # mfccdir=$data/mfcc_test
+    # steps/make_mfcc.sh --mfcc-config conf/mfcc.conf --cmd "$train_cmd" --nj 5 $data/test exp/make_mfcc/$data/test $mfccdir || exit 1;
+    # steps/compute_cmvn_stats.sh $data/test exp/make_mfcc/$data/test $mfccdir || exit 1;
+
+    # Silprob for normal lexicon.
+    steps/get_prons.sh --cmd "$train_cmd" $data/train $data/lang exp/tri3 || exit 1;
+    utils/dict_dir_add_pronprobs.sh --max-normalize true \
+        data/local/dict \
+        exp/tri3/pron_counts_nowb.txt exp/tri3/sil_counts_nowb.txt \
+        exp/tri3/pron_bigram_counts_nowb.txt data/local/dict_plm || exit 1
+
+    utils/prepare_lang.sh --share-silence-phones true --num-sil-states 3 --position-dependent-phones false \
+        data/local/dict_plm "!SIL" data/local/lang_tmp_plm data/lang_plm || exit 1;
+
+    lm_suffix="plm_biglm_tg_2"
+    local/data/openasr_format_data.sh --data data --lang-suffix "_plm" --lm-suffix "$lm_suffix" /data/LM/interp_lm.prune-8 || exit 1;
+
+    lang=data/lang_$lm_suffix
+    graph_dir="graph_`basename $lang`"
+    decode_dir="decode_test_`basename $lang`"
+
+    utils/mkgraph.sh $lang exp/tri3 exp/tri3/${graph_dir}
+    steps/decode_fmllr.sh --nj 5 --cmd "$decode_cmd" \
+     exp/tri3/${graph_dir} $data/test exp/tri3/${decode_dir}_RP
 fi
 
 echo ============================================================================

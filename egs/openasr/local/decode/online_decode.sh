@@ -44,6 +44,8 @@ dir=$1
 if [[ $stage -le 1 && ! -d ${dir}_online/conf ]]; then
     steps/online/nnet3/prepare_online_decoding.sh $online_cmvn_opts $ctx_opts --iter $decode_iter $feat_config \
         $data/lang $dir ${dir}_online || exit 1;
+else
+  cp $dir/$decode_iter.mdl ${dir}_online || exit 1;
 fi
 
 if [ $stage -le 2 ]; then
