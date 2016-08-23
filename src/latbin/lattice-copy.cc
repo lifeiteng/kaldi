@@ -151,7 +151,8 @@ int main(int argc, char *argv[]) {
     bool write_compact = true, ignore_missing = false;
     std::string include_rxfilename;
     std::string exclude_rxfilename;
-
+    std::string utt_prefix;
+    std::string utt_suffix;
     po.Register("write-compact", &write_compact, "If true, write in normal (compact) form.");
     po.Register("include", &include_rxfilename, 
                 "Text file, the first field of each "
@@ -163,6 +164,8 @@ int main(int argc, char *argv[]) {
                 "whose lattices will be excluded");
     po.Register("ignore-missing", &ignore_missing,
                 "Exit with status 0 even if no lattices are copied");
+    po.Register("utt-prefix", &utt_prefix, "Add Prefix to Key().");
+    po.Register("utt-suffix", &utt_suffix, "Add Suffix to Key().");
 
     po.Read(argc, argv);
 
@@ -194,7 +197,7 @@ int main(int argc, char *argv[]) {
       }
 
       for (; !lattice_reader.Done(); lattice_reader.Next(), n_done++)
-        lattice_writer.Write(lattice_reader.Key(), lattice_reader.Value());
+        lattice_writer.Write(utt_prefix + lattice_reader.Key() + utt_suffix, lattice_reader.Value());
     } else {
       SequentialLatticeReader lattice_reader(lats_rspecifier);
       LatticeWriter lattice_writer(lats_wspecifier);
@@ -213,7 +216,7 @@ int main(int argc, char *argv[]) {
       }
 
       for (; !lattice_reader.Done(); lattice_reader.Next(), n_done++)
-        lattice_writer.Write(lattice_reader.Key(), lattice_reader.Value());
+        lattice_writer.Write(utt_prefix + lattice_reader.Key() + utt_suffix, lattice_reader.Value());
     }
     KALDI_LOG << "Done copying " << n_done << " lattices.";
     
