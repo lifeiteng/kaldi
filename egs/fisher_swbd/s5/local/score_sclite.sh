@@ -5,7 +5,7 @@
 cmd=run.pl
 stage=0
 min_lmwt=5
-max_lmwt=20
+max_lmwt=17
 reverse=false
 word_ins_penalty=0.0,0.5,1.0
 #end configuration section.
@@ -67,7 +67,7 @@ if [ $stage -le 0 ]; then
       lattice-add-penalty --word-ins-penalty=$wip ark:- ark:- \| \
       lattice-1best ark:- ark:- \| \
       $align_word lattice-align-words $reorder_opts $lang/phones/word_boundary.int $model ark:- ark:- \| \
-      nbest-to-ctm ark:- - \| \
+      nbest-to-ctm $frame_shift_opt ark:- - \| \
       utils/int2sym.pl -f 5 $lang/words.txt  \| \
       utils/convert_ctm.pl $data/segments $data/reco2file_and_channel \
       '>' $dir/score_LMWT_${wip}/$name.ctm || exit 1;
