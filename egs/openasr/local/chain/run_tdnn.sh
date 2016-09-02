@@ -20,6 +20,8 @@ adapt_stage=0
 cleanup=true
 
 get_egs_stage=-10
+egs_context_opts=""
+
 common_stage=
 
 decode_stage=0
@@ -76,6 +78,8 @@ extra_egs_dirs=
 
 final_normalize_target=0.5
 self_repair_scale=0.00001
+mini_batch=128
+
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
 
@@ -231,8 +235,8 @@ if [ $stage -le 12 ]; then
     --egs.dir "$common_egs_dir" \
     --egs.stage $get_egs_stage \
     --egs.opts "--frames-overlap-per-eg 0 $egs_opts " \
-    --egs.chunk-width $frames_per_eg \
-    --trainer.num-chunk-per-minibatch 128 \
+    --egs.chunk-width $frames_per_eg $egs_context_opts \
+    --trainer.num-chunk-per-minibatch $mini_batch \
     --trainer.frames-per-iter 1500000 \
     --trainer.num-epochs $num_epochs \
     --trainer.optimization.num-jobs-initial $nnet_jobs \

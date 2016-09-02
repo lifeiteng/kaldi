@@ -32,9 +32,9 @@ frame_subsampling_factor=3 # frames-per-second of features we train on divided
                            # by frames-per-second at output of chain model
 alignment_subsampling_factor=3 # frames-per-second of input alignments divided
                                # by frames-per-second at output of chain model
-left_context=4    # amount of left-context per eg (i.e. extra frames of input features
+left_context=10    # amount of left-context per eg (i.e. extra frames of input features
                   # not present in the output supervision).
-right_context=4   # amount of right-context per eg.
+right_context=10   # amount of right-context per eg.
 valid_left_context=   # amount of left_context for validation egs, typically used in
                       # recurrent architectures to ensure matched condition with
                       # training egs
