@@ -16,10 +16,10 @@ srcdata=datanoise/trainsets/openasr500
 num_epochs=2
 exit_stage=
 
-gpus="0 1 2 3 4 5 6 7"
-nnet_jobs=8
-gpus="0 1 3 4 5 6 7"
-nnet_jobs=7
+# gpus="0 1 2 3 4 5 6 7"
+# nnet_jobs=8
+gpus="0 1 3"
+nnet_jobs=3
 
 srcdir=exp/chain/tdnn_sp
 cleandir=exp/chain/tdnn_sp

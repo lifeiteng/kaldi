@@ -28,6 +28,7 @@ def GetArgs():
     usage = '%prog egs-dir-1 egs-dir-2 egs-dir-3 combined-egs-dir'
     parser = OptionParser(usage)
     parser.add_option('--sort', dest='sort', action='store_true', default=False)
+    parser.add_option('--sort-reverse', dest='sort_reverse', action='store_true', default=False)
     parser.add_option('--random-seed', dest='seed', type=int, default=None)
     parser.add_option('--percent', dest='percent', type=str, default="")
     parser.add_option('-C', '--copy', dest='copy', action='store_true', default=False)
@@ -61,7 +62,9 @@ def Combine(args, opt):
         assert len(percents) == len(num_archives_choosed)
         num_final_egs = 0
         for i in range(0, len(num_archives)):
-            num_final_egs += sum([ v <= percents[i] for v in num_archives_choosed[i]])
+            keep = sum([ v <= percents[i] for v in num_archives_choosed[i]])
+            num_archives[i] = keep
+            num_final_egs += keep
 
         combine_numbers = range(1, num_final_egs + 1)
         if len(combine_numbers) == 0:
@@ -71,9 +74,9 @@ def Combine(args, opt):
     max_egs_num = combine_numbers[-1]
     logger.info("[ %s ] egs -> %d egs" % (' '.join([str(v) for v in num_archives]), max_egs_num))
 
-    if not opt.sort:
+    if (not opt.sort) and (not opt.sort_reverse):
         random.shuffle(combine_numbers)
-    else:
+    elif not opt.sort_reverse:
         combine_numbers.reverse()
     # logger.info("[ %s ]" % (' '.join([str(v) for v in combine_numbers])))
 

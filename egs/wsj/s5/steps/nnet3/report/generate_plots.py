@@ -60,9 +60,8 @@ example : steps/nnet3/report/generate_plots.py --comparison-dir exp/nnet3/tdnn1 
     assert(args.start_iter >= 1)
     return args
 
-plot_colors = sns.color_palette("hls", 10)
-
-
+# plot_colors = sns.color_palette("hls", 10)
+plot_colors = sns.xkcd_palette(['green', 'blue', 'red', 'orange', 'light purple', 'blue green', 'poo', 'muted blue', 'sickly yellow', 'carmine', 'dirty green'])
 
 class LatexReport:
     def __init__(self, pdf_file):
@@ -120,11 +119,12 @@ def GenerateAccuracyPlots(exp_dir, output_dir, plot, key = 'accuracy', file_base
         plots = []
 
     comparison_dir = [] if comparison_dir is None else comparison_dir
-    dirs = [exp_dir] + comparison_dir
+    dirs = comparison_dir + [exp_dir]
     index = 0
+    num_dirs = len(dirs)
     for dir in dirs:
         [accuracy_report, accuracy_times, accuracy_data] = nlp.GenerateAccuracyReport(dir, key)
-        if index == 0:
+        if index == (num_dirs - 1):
             # this is the main experiment directory
             acc_file = open("{0}/{1}.log".format(output_dir, file_basename), "w")
             acc_file.write(accuracy_report)
@@ -157,7 +157,7 @@ def GenerateNonlinStatsPlots(exp_dir, output_dir, plot, comparison_dir = None, s
     assert(start_iter >= 1)
 
     comparison_dir = [] if comparison_dir is None else comparison_dir
-    dirs = [exp_dir] + comparison_dir
+    dirs = comparison_dir + [exp_dir]
     index = 0
     stats_per_dir = {}
 
@@ -255,7 +255,7 @@ def GenerateClippedProportionPlots(exp_dir, output_dir, plot, comparison_dir = N
     assert(start_iter >= 1)
 
     comparison_dir = [] if comparison_dir is None else comparison_dir
-    dirs = [exp_dir] + comparison_dir
+    dirs = comparison_dir + [exp_dir] 
     index = 0
     stats_per_dir = {}
     for dir in dirs:
