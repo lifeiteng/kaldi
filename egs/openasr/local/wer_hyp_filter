@@ -8,4 +8,11 @@ s/-HOLDER/HOLDER/g
 s/COMPAIGN/CAMPAIGN/g
 s/APPROACHES-/APPROACHES/g
 s/RESEACHERS/RESEARCHERS/g
-
+s/ uh / /g
+s/ err / /g
+s/ um / /g
+s/ ah / /g
+s/ uh / /g
+s/ err / /g
+s/ um / /g
+s/ ah / /g
