@@ -42,6 +42,7 @@ TreeLeaves=4000
 frame_subsampling_factor=3
 tree_suffix=""
 tree_dir=exp/chain/tri3_tree
+tree_context_opts=""
 
 frames_per_eg=150
 xent_regularize=0.1
@@ -99,7 +100,7 @@ if [ -z $dir ];then
   dir=exp/chain/tdnn$suffix
 fi
 
-if [ -z $tree_dir ];then
+if [[ -z $tree_dir || ! -z $tree_suffix ]] ;then
   tree_dir=exp/chain/tri3_tree_${TreeLeaves}$tree_suffix
   echo "TreeDir is $tree_dir"
 fi
@@ -147,7 +148,7 @@ fi
 if [ $stage -le 8 ]; then
   # Build a tree using our new topology.
   steps/nnet3/chain/build_tree.sh --frame-subsampling-factor $frame_subsampling_factor  \
-      --leftmost-questions-truncate -1 \
+      --leftmost-questions-truncate -1 --context-opts "$tree_context_opts" \
       --cmd "$train_cmd" $TreeLeaves data_mfcc/train_all $lang exp/tri3_all_ali $tree_dir || exit 1;
 fi
 
@@ -158,7 +159,7 @@ if [ $stage -le 9 ]; then
   bottleneck_dim_opts=""
   [ ! -z $bottleneck_dim ] && bottleneck_dim_opts="--bottleneck-dim $bottleneck_dim"
   steps/nnet3/tdnn/make_configs.py \
-    --self-repair-scale $self_repair_scale \
+    --self-repair-scale-nonlinearity $self_repair_scale \
     --feat-dir $train_data_dir \
     --tree-dir $tree_dir \
     --relu-dim $relu_dim $bottleneck_dim_opts \

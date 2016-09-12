@@ -617,7 +617,7 @@ def Train(args, run_opts):
         logger.info("Creating denominator FST")
         chain_lib.CreateDenominatorFst(args.dir, args.tree_dir, run_opts)
 
-    if (args.stage <= -4):
+    if (args.stage <= -1):
         logger.info("Initializing a basic network for estimating preconditioning matrix")
         train_lib.RunKaldiCommand("""
 {command} {dir}/log/nnet_init.log \
