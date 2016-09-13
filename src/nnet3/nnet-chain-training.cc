@@ -28,36 +28,72 @@ NnetChainTrainer::NnetChainTrainer(const NnetChainTrainingOptions &opts,
                                    const fst::StdVectorFst &den_fst,
                                    Nnet *nnet):
     opts_(opts),
-    den_graph_(den_fst, nnet->OutputDim("output")),
+    need_delete_den_graph_(true),
     nnet_(nnet),
     compiler_(*nnet, opts_.nnet_config.optimize_config),
     num_minibatches_processed_(0) {
-  if (opts.nnet_config.zero_component_stats)
-    ZeroComponentStats(nnet);
-  if (opts.nnet_config.momentum == 0.0 &&
-      opts.nnet_config.max_param_change == 0.0) {
+  den_graph_ = new chain::DenominatorGraph(den_fst, nnet->OutputDim("output"));
+  Init();
+}
+
+NnetChainTrainer::NnetChainTrainer(const NnetChainTrainingOptions &opts,
+                   const chain::DenominatorGraph &den_graph,
+                   Nnet *nnet):
+    opts_(opts),
+    need_delete_den_graph_(false),
+    nnet_(nnet),
+    compiler_(*nnet, opts_.nnet_config.optimize_config),
+    num_minibatches_processed_(0) {
+  den_graph_ = &(const_cast<chain::DenominatorGraph &>(den_graph));
+  Init();
+}
+
+void NnetChainTrainer::ResetNnet(Nnet *nnet) {
+  delete delta_nnet_;
+  if (nnet_ != NULL)
+    KALDI_ASSERT(nnet_->OutputDim("output") == nnet->OutputDim("output"));
+  nnet_ = nnet;
+  if (opts_.nnet_config.momentum == 0.0 &&
+      opts_.nnet_config.max_param_change == 0.0) {
     delta_nnet_= NULL;
   } else {
-    KALDI_ASSERT(opts.nnet_config.momentum >= 0.0 &&
-                 opts.nnet_config.max_param_change >= 0.0);
+    KALDI_ASSERT(opts_.nnet_config.momentum >= 0.0 &&
+                 opts_.nnet_config.max_param_change >= 0.0);
     delta_nnet_ = nnet_->Copy();
     bool is_gradient = false;  // setting this to true would disable the
                                // natural-gradient updates.
     SetZero(is_gradient, delta_nnet_);
   }
-  if (opts.nnet_config.read_cache != "") {
+  num_minibatches_processed_ = 0;
+  objf_info_.clear();
+}
+
+void NnetChainTrainer::Init() {
+  if (opts_.nnet_config.zero_component_stats)
+    ZeroComponentStats(nnet_);
+  if (opts_.nnet_config.momentum == 0.0 &&
+      opts_.nnet_config.max_param_change == 0.0) {
+    delta_nnet_= NULL;
+  } else {
+    KALDI_ASSERT(opts_.nnet_config.momentum >= 0.0 &&
+                 opts_.nnet_config.max_param_change >= 0.0);
+    delta_nnet_ = nnet_->Copy();
+    bool is_gradient = false;  // setting this to true would disable the
+                               // natural-gradient updates.
+    SetZero(is_gradient, delta_nnet_);
+  }
+  if (opts_.nnet_config.read_cache != "") {
     bool binary;
     try {
-      Input ki(opts.nnet_config.read_cache, &binary);
+      Input ki(opts_.nnet_config.read_cache, &binary);
       compiler_.ReadCache(ki.Stream(), binary);
-      KALDI_LOG << "Read computation cache from " << opts.nnet_config.write_cache;
+      KALDI_LOG << "Read computation cache from " << opts_.nnet_config.write_cache;
     } catch (...) {
       KALDI_WARN << "Could not open cached computation. "
                     "Probably this is the first training iteration.";
     }
-  } 
+  }
 }
-
 
 void NnetChainTrainer::Train(const NnetChainExample &chain_eg) {
   bool need_model_derivative = true;
@@ -131,7 +167,7 @@ void NnetChainTrainer::ProcessOutputs(const NnetChainExample &eg,
 
     BaseFloat tot_objf, tot_l2_term, tot_weight;
 
-    ComputeChainObjfAndDeriv(opts_.chain_config, den_graph_,
+    ComputeChainObjfAndDeriv(opts_.chain_config, *den_graph_,
                              sup.supervision, nnet_output,
                              &tot_objf, &tot_l2_term, &tot_weight,
                              &nnet_output_deriv,
@@ -189,7 +225,9 @@ NnetChainTrainer::~NnetChainTrainer() {
     Output ko(opts_.nnet_config.write_cache, opts_.nnet_config.binary_write_cache);
     compiler_.WriteCache(ko.Stream(), opts_.nnet_config.binary_write_cache);
     KALDI_LOG << "Wrote computation cache to " << opts_.nnet_config.write_cache;
-  } 
+  }
+  if (need_delete_den_graph_)
+    delete den_graph_;
   delete delta_nnet_;
 }
 
