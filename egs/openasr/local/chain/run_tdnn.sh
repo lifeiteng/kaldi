@@ -74,7 +74,11 @@ skip_decode=true
 skip_train=false
 
 egs_opts=
+
 nnet_jobs=3
+nnet_jobs_initial=0
+nnet_jobs_final=0
+
 extra_egs_dirs=
 
 final_normalize_target=0.5
@@ -219,6 +223,13 @@ if [ $stage -le 12 ]; then
   mkdir -p $dir/egs
   touch $dir/egs/.nodelete # keep egs around when that run dies.
   mkdir -p $dir/log
+  if [ $nnet_jobs_initial -eq 0 ];then
+      nnet_jobs_initial=$nnet_jobs
+  fi
+  if [ $nnet_jobs_final -eq 0 ];then
+      nnet_jobs_final=$nnet_jobs
+  fi
+
   # --feat.online-ivector-dir "$ivector_dir" \
   exit_stage_opts=""
   [ ! -z $exit_stage ] && exit_stage_opts="--exit-stage $exit_stage"
@@ -240,8 +251,8 @@ if [ $stage -le 12 ]; then
     --trainer.num-chunk-per-minibatch $mini_batch \
     --trainer.frames-per-iter 1500000 \
     --trainer.num-epochs $num_epochs \
-    --trainer.optimization.num-jobs-initial $nnet_jobs \
-    --trainer.optimization.num-jobs-final $nnet_jobs \
+    --trainer.optimization.num-jobs-initial $nnet_jobs_initial \
+    --trainer.optimization.num-jobs-final $nnet_jobs_final \
     --trainer.optimization.initial-effective-lrate $initial_effective_lrate \
     --trainer.optimization.final-effective-lrate $final_effective_lrate \
     --trainer.max-param-change 2.0 \
