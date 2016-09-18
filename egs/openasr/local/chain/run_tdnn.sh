@@ -158,7 +158,7 @@ if [ $stage -le 9 ]; then
   bottleneck_dim_opts=""
   [ ! -z $bottleneck_dim ] && bottleneck_dim_opts="--bottleneck-dim $bottleneck_dim"
   steps/nnet3/tdnn/make_configs.py \
-    --self-repair-scale $self_repair_scale \
+    --self-repair-scale-nonlinearity $self_repair_scale \
     --feat-dir $train_data_dir \
     --tree-dir $tree_dir \
     --relu-dim $relu_dim $bottleneck_dim_opts \
