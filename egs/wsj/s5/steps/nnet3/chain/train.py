@@ -378,7 +378,6 @@ class RunOpts:
         self.gpus_wait = None
         self.password = None
         self.cv_period = 1
-        self.parallel_level = 0
 
 def TrainNewModels(dir, iter, srand, num_jobs, num_archives_processed, num_archives,
                    raw_model_string, egs_dir,
@@ -403,28 +402,27 @@ def TrainNewModels(dir, iter, srand, num_jobs, num_archives_processed, num_archi
 
     processes = []
     job = 1
-    if run_opts.parallel_level == 0:
-        while job < num_jobs+1:
-            gpu_processes = []
-            for i in run_opts.gpus: # TODO queue gpu set up
-                if job >= num_jobs + 1:
-                    break
-                k = num_archives_processed + job - 1 # k is a zero-based index that we will derive
-                                                       # the other indexes from.
-                archive_index = (k % num_archives) + 1 # work out the 1-based archive index.
-                frame_shift = (archive_index + k/num_archives) % frame_subsampling_factor
-                # previous : frame_shift = (k/num_archives) % frame_subsampling_factor
-                gpu_info = ""
-                if int(i) >= 0:
-                    gpu_info = " --gpu-id=" + str(i)
-                else:
-                    gpu_info = "--use-gpu=wait"
-                if job == 1:
-                    cur_cache_io_opts = cache_io_opts + " --write-cache={dir}/cache.{next_iter}".format(dir = dir, next_iter = iter + 1)
-                else:
-                    cur_cache_io_opts = cache_io_opts
+    while job < num_jobs+1:
+        gpu_processes = []
+        for i in run_opts.gpus: # TODO queue gpu set up
+            if job >= num_jobs + 1:
+                break
+            k = num_archives_processed + job - 1 # k is a zero-based index that we will derive
+                                                   # the other indexes from.
+            archive_index = (k % num_archives) + 1 # work out the 1-based archive index.
+            frame_shift = (archive_index + k/num_archives) % frame_subsampling_factor
+            # previous : frame_shift = (k/num_archives) % frame_subsampling_factor
+            gpu_info = ""
+            if int(i) >= 0:
+                gpu_info = " --gpu-id=" + str(i)
+            else:
+                gpu_info = "--use-gpu=wait"
+            if job == 1:
+                cur_cache_io_opts = cache_io_opts + " --write-cache={dir}/cache.{next_iter}".format(dir = dir, next_iter = iter + 1)
+            else:
+                cur_cache_io_opts = cache_io_opts
 
-                process_handle = train_lib.RunKaldiCommand("""
+            process_handle = train_lib.RunKaldiCommand("""
 {command} {train_queue_opt} {dir}/log/train.{iter}.{job}.log \
   nnet3-chain-train {parallel_train_opts} \
   --apply-deriv-weights={app_deriv_wts} \
@@ -435,80 +433,31 @@ def TrainNewModels(dir, iter, srand, num_jobs, num_archives_processed, num_archi
    "{raw_model}" {dir}/den.fst \
   "ark,bg:nnet3-chain-copy-egs --truncate-deriv-weights={trunc_deriv} --frame-shift={fr_shft} ark:{egs_dir}/cegs.{archive_index}.ark ark:- | nnet3-chain-shuffle-egs --buffer-size={shuffle_buffer_size} --srand={srand} ark:- ark:-| nnet3-chain-merge-egs --minibatch-size={num_chunk_per_minibatch} ark:- ark:- |" \
   {dir}/{next_iter}.{job}.raw
-                """.format(command = run_opts.command,
-                         train_queue_opt = run_opts.train_queue_opt,
-                         dir = dir, iter = iter, srand = iter + srand, next_iter = iter + 1, job = job,
-                         deriv_time_opts = deriv_time_opts,
-                         trunc_deriv = truncate_deriv_weights,
-                         app_deriv_wts = apply_deriv_weights,
-                         fr_shft = frame_shift, l2 = l2_regularize,
-                         xent_reg = xent_regularize, leaky = leaky_hmm_coefficient,
-                         parallel_train_opts = run_opts.parallel_train_opts + gpu_info,
-                         momentum = momentum, max_param_change = max_param_change,
-                         raw_model = raw_model_string,
-                         egs_dir = egs_dir, archive_index = archive_index,
-                         shuffle_buffer_size = shuffle_buffer_size,
-                         cache_io_opts = cur_cache_io_opts,
-                         num_chunk_per_minibatch = num_chunk_per_minibatch),
-                    wait = False)
+            """.format(command = run_opts.command,
+                     train_queue_opt = run_opts.train_queue_opt,
+                     dir = dir, iter = iter, srand = iter + srand, next_iter = iter + 1, job = job,
+                     deriv_time_opts = deriv_time_opts,
+                     trunc_deriv = truncate_deriv_weights,
+                     app_deriv_wts = apply_deriv_weights,
+                     fr_shft = frame_shift, l2 = l2_regularize,
+                     xent_reg = xent_regularize, leaky = leaky_hmm_coefficient,
+                     parallel_train_opts = run_opts.parallel_train_opts + gpu_info,
+                     momentum = momentum, max_param_change = max_param_change,
+                     raw_model = raw_model_string,
+                     egs_dir = egs_dir, archive_index = archive_index,
+                     shuffle_buffer_size = shuffle_buffer_size,
+                     cache_io_opts = cur_cache_io_opts,
+                     num_chunk_per_minibatch = num_chunk_per_minibatch),
+                wait = False)
+            # if str(i) == '-1':
+            #     time.sleep(1)
+            job += 1
+            gpu_processes.append(process_handle)
 
-                job += 1
-                gpu_processes.append(process_handle)
-
-            if run_opts.gpus_wait:
-                train_lib.AllSuccess(dir, iter, gpu_processes)
-            else:
-                processes.extend(gpu_processes)
-    elif run_opts.parallel_level == 1:
-        cur_cache_io_opts = cache_io_opts + " --write-cache={dir}/cache.{next_iter}".format(dir = dir, next_iter = iter + 1)
-        gpu_processes = []
-        archives = []
-        while job < num_jobs+1:
-            for i in run_opts.gpus:
-                if job >= num_jobs + 1:
-                    break
-                k = num_archives_processed + job - 1 # k is a zero-based index that we will derive
-                                                       # the other indexes from.
-                archive_index = (k % num_archives) + 1 # work out the 1-based archive index.
-                frame_shift = (archive_index + k/num_archives) % frame_subsampling_factor
-                job += 1
-                archives.append("ark,bg:nnet3-chain-copy-egs --truncate-deriv-weights={trunc_deriv} --frame-shift={fr_shft} ark:{egs_dir}/cegs.{archive_index}.ark ark:- | nnet3-chain-shuffle-egs --buffer-size={shuffle_buffer_size} --srand={srand} ark:- ark:-| nnet3-chain-merge-egs --minibatch-size={num_chunk_per_minibatch} ark:- ark:- |".format(trunc_deriv = truncate_deriv_weights,
-                    fr_shft = frame_shift,
-                    egs_dir = egs_dir, archive_index = archive_index,
-                    shuffle_buffer_size = shuffle_buffer_size,
-                    num_chunk_per_minibatch = num_chunk_per_minibatch))
-
-        process_handle = train_lib.RunKaldiCommand("""
-{command} {train_queue_opt} {dir}/log/train.{iter}.log \
-  nnet3-chain-train-parallel --gpus={gpus} {parallel_train_opts} \
-  --apply-deriv-weights={app_deriv_wts} \
-  --l2-regularize={l2} --leaky-hmm-coefficient={leaky} \
-  {cache_io_opts} --xent-regularize={xent_reg} {deriv_time_opts} \
-  --print-interval=10 --momentum={momentum} \
-  --max-param-change={max_param_change} \
-  "{raw_model}" {dir}/den.fst \
-  {dir}/{next_iter}.JOB.raw \
-  {archives}
-        """.format(command = run_opts.command,
-                gpus = ",".join([str(i) for i in run_opts.gpus]),
-                train_queue_opt = run_opts.train_queue_opt,
-                dir = dir, iter = iter, srand = iter + srand, next_iter = iter + 1,
-                deriv_time_opts = deriv_time_opts,
-                trunc_deriv = truncate_deriv_weights,
-                app_deriv_wts = apply_deriv_weights,
-                l2 = l2_regularize, xent_reg = xent_regularize, leaky = leaky_hmm_coefficient,
-                parallel_train_opts = run_opts.parallel_train_opts + gpu_info,
-                momentum = momentum, max_param_change = max_param_change,
-                raw_model = raw_model_string, cache_io_opts = cur_cache_io_opts,
-                archives = ' '.join(['\"' + str(egs) + '\"' for egs in archives ])),
-            wait = False)
-
-        gpu_processes.append(process_handle)
         if run_opts.gpus_wait:
             train_lib.AllSuccess(dir, iter, gpu_processes)
         else:
             processes.extend(gpu_processes)
-
     train_lib.AllSuccess(dir, iter, processes)
 
 def TrainOneIteration(dir, iter, srand, num_iters, pruner_iters, egs_dir,

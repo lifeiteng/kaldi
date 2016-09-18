@@ -58,12 +58,6 @@ class NnetChainTrainer {
                    const fst::StdVectorFst &den_fst,
                    Nnet *nnet);
 
-  NnetChainTrainer(const NnetChainTrainingOptions &config,
-                   const chain::DenominatorGraph &den_graph,
-                   Nnet *nnet);
-
-  void ResetNnet(Nnet *nnet);
-
   // train on one minibatch.
   void Train(const NnetChainExample &eg);
 
@@ -72,15 +66,12 @@ class NnetChainTrainer {
 
   ~NnetChainTrainer();
  private:
-  void Init();
-
   void ProcessOutputs(const NnetChainExample &eg,
                       NnetComputer *computer);
 
   const NnetChainTrainingOptions opts_;
 
-  bool need_delete_den_graph_;
-  chain::DenominatorGraph *den_graph_;
+  chain::DenominatorGraph den_graph_;
   Nnet *nnet_;
   Nnet *delta_nnet_;  // Only used if momentum != 0.0 or max-param-change !=
                       // 0.0.  nnet representing accumulated parameter-change
