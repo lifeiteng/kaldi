@@ -21,7 +21,7 @@ handler.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s [%(filename)s:%(lineno)s - %(funcName)s - %(levelname)s ] %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-logger.info('Starting chain train_get_egs.py')
+logger.info('Starting combine_egs.py')
 
 
 def GetArgs():
@@ -33,7 +33,9 @@ def GetArgs():
     parser.add_option('--percent', dest='percent', type=str, default="")
     parser.add_option('-C', '--copy', dest='copy', action='store_true', default=False)
     (opt, args) = parser.parse_args()
-    assert len(args) >= 2
+    if len(args) < 2:
+        parser.print_help()
+        exit(-1)
     if opt.seed:
         random.seed(opt.seed)
 
@@ -55,6 +57,7 @@ def Combine(args, opt):
         os.mkdir(combine_egs_dir)
     combine_numbers = range(1, sum(num_archives) + 1)
     percents = None
+    num_archives_keeped = [v for v in num_archives]
     if opt.percent:
         logger.info("Percent: %s" % (opt.percent))
         percents = [float(v) for v in opt.percent.split()]
@@ -63,7 +66,7 @@ def Combine(args, opt):
         num_final_egs = 0
         for i in range(0, len(num_archives)):
             keep = sum([ v <= percents[i] for v in num_archives_choosed[i]])
-            num_archives[i] = keep
+            num_archives_keeped[i] = keep
             num_final_egs += keep
 
         combine_numbers = range(1, num_final_egs + 1)
@@ -72,26 +75,33 @@ def Combine(args, opt):
             exit(-1)
 
     max_egs_num = combine_numbers[-1]
-    logger.info("[ %s ] egs -> %d egs" % (' '.join([str(v) for v in num_archives]), max_egs_num))
+    logger.info("[ %s ] egs -> %d egs" % (' '.join([str(v) for v in num_archives_keeped]), max_egs_num))
 
     if (not opt.sort) and (not opt.sort_reverse):
         random.shuffle(combine_numbers)
     elif not opt.sort_reverse:
         combine_numbers.reverse()
-    # logger.info("[ %s ]" % (' '.join([str(v) for v in combine_numbers])))
+    logger.info("[ %s ]" % (' '.join([str(v) for v in combine_numbers])))
 
     for e in range(0, len(args[:-1])):
+        num_copy_mv = 0
         for i in range(1, num_archives[e] + 1):
             if percents:
                 if num_archives_choosed[e][i-1] > percents[e]:
                     continue
+            num_copy_mv += 1
             aidx = combine_numbers.pop()
             logger.info("Move/Copy {0}/cegs.{1}.ark -> {2}/cegs.{3}.ark".format(args[e], i, combine_egs_dir, aidx))
             if args[e].find('combine') < 0 or opt.copy:
                 shutil.copy("{0}/cegs.{1}.ark".format(args[e], i), "{0}/cegs.{1}.ark".format(combine_egs_dir, aidx))
             else:
                 shutil.move("{0}/cegs.{1}.ark".format(args[e], i), "{0}/cegs.{1}.ark".format(combine_egs_dir, aidx))
-    assert len(combine_numbers) == 0
+        logger.info("[ Origin %d == Copy/Mv %d ]" % (num_archives_keeped[e], num_copy_mv))
+        assert num_copy_mv == num_archives_keeped[e]
+
+    if len(combine_numbers) != 0:
+        logger.info("\nNot Empty!!! : [ %s ]" % ' '.join([str(v) for v in combine_numbers]))
+        exit(-1)
     for egs in ['combine.cegs', 'train_diagnostic.cegs', 'valid_diagnostic.cegs']:
         if os.path.isfile(os.path.join(combine_egs_dir, egs)):
             os.remove(os.path.join(combine_egs_dir, egs))
