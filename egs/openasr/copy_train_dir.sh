@@ -34,7 +34,7 @@ if [ ! -z $fix_layer ];then
 fi
 
 if $deep;then
-    for x in 0.trans_mdl den.fst normalization.fst;do
+    for x in 0.trans_mdl den.fst normalization.fst lda_stats;do
         cp $src_dir/$x $dir || exit 1;
     done
 fi
