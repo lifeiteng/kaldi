@@ -2,7 +2,7 @@
 # Apache 2.0.
 
 from __future__ import division
-import sys, glob, re, math, datetime, argparse
+import sys, os, glob, re, math, datetime, argparse
 import imp
 
 ntl = imp.load_source('ntl', 'steps/nnet3/nnet3_train_lib.py')
@@ -154,8 +154,10 @@ def ParseProgressLogsForParamDiff(exp_dir, pattern):
     return data
 
 def ParseTrainLogs(exp_dir):
-  train_log_files = "%s/log/train.*.log" % (exp_dir)
+  train_log_files = "%s/log/train.*.1.log" % (exp_dir)
   train_log_lines = ntl.RunKaldiCommand('grep -e Accounting {0}'.format(train_log_files))[0]
+  # train_log_lines = ntl.RunKaldiCommand('find {0}/log/ -name "train.*.log" -type f -maxdepth 1 | xargs grep -e Accounting'.format(exp_dir))[0]
+
   parse_regex = re.compile(".*train\.([0-9]+)\.([0-9]+)\.log:# Accounting: time=([0-9]+) thread.*")
 
   train_times = {}
