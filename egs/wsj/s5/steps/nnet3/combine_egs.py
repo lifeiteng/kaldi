@@ -112,7 +112,7 @@ def Combine(args, opt):
         shutil.rmtree(os.path.join(combine_egs_dir, 'info'))
     shutil.copytree(os.path.join(args[0], 'info'), os.path.join(combine_egs_dir, 'info'))
     with open(os.path.join(combine_egs_dir, 'info/num_archives'), 'w') as f:
-        print >>f, sum(num_archives)
+        print >>f, max_egs_num
     open(os.path.join(combine_egs_dir, '.done'), 'a').close()
 
 
