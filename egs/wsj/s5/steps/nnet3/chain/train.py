@@ -177,7 +177,7 @@ def GetArgs():
                         default=4.0,
                         help="Value used in preconditioning matrix estimation")
     parser.add_argument("--trainer.lda.max-lda-jobs", type=float, dest='max_lda_jobs',
-                        default=10,
+                        default=100,
                         help="Max number of jobs used for LDA stats accumulation")
 
     # Parameters for the optimization

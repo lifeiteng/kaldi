@@ -111,7 +111,7 @@ def ComputePreconditioningMatrix(dir, egs_dir, num_lda_jobs, run_opts,
 
   # Write stats with the same format as stats for LDA.
     train_lib.RunKaldiCommand("""
-{command} JOB=1:{num_lda_jobs} {dir}/log/get_lda_stats.JOB.log \
+{command} --max-jobs-run 10 JOB=1:{num_lda_jobs} {dir}/log/get_lda_stats.JOB.log \
  nnet3-chain-acc-lda-stats --rand-prune={rand_prune} \
     {dir}/init.raw "ark:{egs_dir}/cegs.JOB.ark" {dir}/JOB.lda_stats""".format(
         command = run_opts.command,
