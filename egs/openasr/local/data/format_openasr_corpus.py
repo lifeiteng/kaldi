@@ -27,7 +27,8 @@ def parse_raw_line(line):
         return (None, None)        
 
     (activity_id, sentence_id) = as_id.split('_')
-    new_wav_file = '_'.join([speaker, activity_id, sentence_id, date]) + '.wav'
+    # new_wav_file = '_'.join([speaker, activity_id, sentence_id, date]) + '.wav'
+    new_wav_file = '_'.join([speaker, activity_id, sentence_id]) + '.wav'
     return (speaker, new_wav_file)
 
 def parse_trans_line(line):
@@ -75,7 +76,7 @@ def run(raws_file, trans_file, raw_todir, doc_todir, count=False):
             if speaker_raws[speaker].has_key(new_wav_file):
                 repeated_raws += 1
                 print "Repeated(discard reversed_time) raw file:", new_wav_file
-                continue
+                # continue
             raws_new_files.add(new_wav_file)
             speaker_raws[speaker][new_wav_file] = gen_ffmpeg_command(line, new_wav_file, raw_todir + '/' + speaker)
     print "Discard reversed_time: %d repeated raws" % repeated_raws

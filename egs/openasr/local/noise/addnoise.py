@@ -39,7 +39,9 @@ def GetArgs():
     parser.add_argument(
         "--random-seed", type=int, required=False, help="random seed.")
     parser.add_argument(
-        "--snr-db", type=float, required=True, help="Target snr db.")
+        "--snr-db", type=float, required=False, help="Target snr db.")
+    parser.add_argument(
+        "--snr-db-range", type=str, required=False, help="Target snr db range, uniform.")
     parser.add_argument("--noise-data-dir", type=str, required=True)
     parser.add_argument("--input-data-dir", type=str, required=True)
     parser.add_argument("--output-data-dir", type=str, required=True)
@@ -49,6 +51,9 @@ def GetArgs():
     if args.random_seed is not None:
         print("Random Seed: %d" % (args.random_seed))
         random.seed(args.random_seed)
+    if args.snr_db is None and args.snr_db_range is None:
+        print("Must set --snr-db or --snr-db-range ")
+        exit(1)
 
     return args
 
@@ -117,7 +122,8 @@ def ParseDataDirInfo(data_dir):
         data_dir_file('spk2utt'), value_processor=lambda x: x)
     text = ParseFileToDict(
         data_dir_file('text'), value_processor=lambda x: " ".join(x))
-    wavscp = ParseFileToDict(data_dir_file('wav.scp'), assert2fields=False)
+    wavscp = ParseFileToDict(data_dir_file('wav.scp'), assert2fields=False,
+        value_processor=lambda x: " ".join(x))
     utt2dur = ParseFileToDict(
         data_dir_file('utt2dur'), value_processor=lambda x: float(x[0]))
     utt2uniq = None
@@ -162,7 +168,7 @@ def SelectNoiseWave(wavscp,
     return wavscp[utt], random.random() * float(utt2dur[utt])
 
 
-def CorruptNoise(input_dir, noise_dir, output_dir, noise_type, snr_db):
+def CorruptNoise(input_dir, noise_dir, output_dir, noise_type, snr_db=0, snr_db_range=None):
     wav_addnoise = lambda input, noise, snr, shfit: 'wav-addnoise --snr-db={snr} --shift={shift} "{input}" "{noise}" - |'.format(input=input,
         noise=noise, snr=snr, shift=shift)
 
@@ -186,6 +192,9 @@ def CorruptNoise(input_dir, noise_dir, output_dir, noise_type, snr_db):
             wave_file = wavscp[ut]
             corrupt_noise_wav = None
             snr_db_random = random.uniform(snr_db - 2.5, snr_db + 2.5)
+            if snr_db_range is not None:
+                snr_db_random = random.uniform(snr_db_range[0], snr_db_range[-1])
+
             noise_file, shift = SelectNoiseWave(
                 noisewavscp, noisespk2utt, noiseutt2dur, noise_type, weights)
             corrupt_noise_wav = wav_addnoise(wave_file, noise_file,
@@ -210,9 +219,15 @@ def Main():
             args.noise_data_dir))
     if args.noise not in ['white', 'pink']:
         CheckFiles(args.noise_data_dir, check_duration=True)
-
-    CorruptNoise(args.input_data_dir, args.noise_data_dir,
-                 args.output_data_dir, args.noise, args.snr_db)
+    if args.snr_db is not None:
+        CorruptNoise(args.input_data_dir, args.noise_data_dir,
+                     args.output_data_dir, args.noise, snr_db=args.snr_db)
+    elif args.snr_db_range is not None:
+        snr_db_range = [ float(v) for v in args.snr_db_range.replace('"', '').split(',')]
+        assert len(snr_db_range) == 2
+        print("SNR [%.1f %.1f]" % (snr_db_range[0], snr_db_range[1]))
+        CorruptNoise(args.input_data_dir, args.noise_data_dir,
+                     args.output_data_dir, args.noise, snr_db_range=snr_db_range)
 
     RunKaldiCommand("utils/fix_data_dir.sh {0}".format(args.output_data_dir))
 

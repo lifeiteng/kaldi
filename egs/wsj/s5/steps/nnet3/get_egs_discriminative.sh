@@ -110,9 +110,11 @@ nj=$(cat $denlatdir/num_jobs) || exit 1;
 sdata=$data/split$nj
 utils/split_data.sh $data $nj
 
-# Get list of validation utterances.
-awk '{print $1}' $data/utt2spk | utils/shuffle_list.pl | head -$num_utts_subset \
+if [ ! -f $dir/valid_uttlist ];then
+  # Get list of validation utterances.
+  awk '{print $1}' $data/utt2spk | utils/shuffle_list.pl | head -$num_utts_subset \
     > $dir/valid_uttlist || exit 1;
+fi
 
 if [ -f $data/utt2uniq ]; then  # this matters if you use data augmentation.
   echo "File $data/utt2uniq exists, so augmenting valid_uttlist to"
@@ -125,8 +127,10 @@ if [ -f $data/utt2uniq ]; then  # this matters if you use data augmentation.
   rm $dir/uniq2utt $dir/valid_uttlist.tmp
 fi
 
-awk '{print $1}' $data/utt2spk | utils/filter_scp.pl --exclude $dir/valid_uttlist | \
-   utils/shuffle_list.pl | head -$num_utts_subset > $dir/train_subset_uttlist || exit 1;
+if [ ! -f $dir/train_subset_uttlist ];then
+  awk '{print $1}' $data/utt2spk | utils/filter_scp.pl --exclude $dir/valid_uttlist | \
+    utils/shuffle_list.pl | head -$num_utts_subset > $dir/train_subset_uttlist || exit 1;
+fi
 
 [ -z "$transform_dir" ] && transform_dir=$alidir
 
@@ -160,10 +164,12 @@ cp $alidir/tree $dir
 cp $lang/phones/silence.csl $dir/info/
 cp $src_model $dir/final.mdl || exit 1
 
-# Get list of utterances for prior computation.
-awk '{print $1}' $data/utt2spk | utils/filter_scp.pl --exclude $dir/valid_uttlist | \
-  utils/shuffle_list.pl | head -$num_priors_subset \
-  > $dir/priors_uttlist || exit 1;
+if $adjust_priors;then
+  # Get list of utterances for prior computation.
+  awk '{print $1}' $data/utt2spk | utils/filter_scp.pl --exclude $dir/valid_uttlist | \
+    utils/shuffle_list.pl | head -$num_priors_subset \
+    > $dir/priors_uttlist || exit 1;
+fi
 
 ## We don't support deltas here, only LDA or raw (mainly because deltas are less
 ## frequently used).
@@ -269,9 +275,9 @@ fi
 
 if [ $stage -le 3 ]; then
   echo "$0: copying training lattices"
-
-  $cmd --max-jobs-run 6 JOB=1:$nj $dir/log/lattice_copy.JOB.log \
-    lattice-copy --write-compact=false --include="cat $dir/valid_uttlist $dir/train_subset_uttlist |" --ignore-missing \
+  export LC_ALL=C
+  $cmd JOB=1:$nj $dir/log/lattice_copy.JOB.log \
+    lattice-copy --write-compact=false --include="cat $dir/valid_uttlist $dir/train_subset_uttlist| sort |" --ignore-missing \
     "ark:gunzip -c $denlatdir/lat.JOB.gz|" ark,scp:$dir/lat_special.JOB.ark,$dir/lat_special.JOB.scp || exit 1;
 
   for id in $(seq $nj); do cat $dir/lat_special.$id.scp; done > $dir/lat_special.scp

@@ -158,12 +158,12 @@ if [ $stage -le 0 ] && [ -f $data/utt2uniq ]; then  # this matters if you use da
     sort | uniq | utils/apply_map.pl $dir/uniq2utt | \
     awk '{for(n=1;n<=NF;n++) print $n;}' | sort  > $dir/valid_uttlist
   rm $dir/uniq2utt $dir/valid_uttlist.tmp
-fi
 
-cat $data/utt2dur | \
-  awk -v min_len=$frames_per_eg -v fs=$frame_shift '{if ($2 * 1/fs >= min_len) print $1}' | \
-   utils/filter_scp.pl --exclude $dir/valid_uttlist | \
-   utils/shuffle_list.pl | head -$num_utts_subset > $dir/train_subset_uttlist || exit 1;
+  cat $data/utt2dur | \
+    awk -v min_len=$frames_per_eg -v fs=$frame_shift '{if ($2 * 1/fs >= min_len) print $1}' | \
+     utils/filter_scp.pl --exclude $dir/valid_uttlist | \
+     utils/shuffle_list.pl | head -$num_utts_subset > $dir/train_subset_uttlist || exit 1;
+fi
 
 len_uttlist=`wc -l $dir/train_subset_uttlist | awk '{print $1}'`
 if [ $len_uttlist -lt $num_utts_subset ]; then

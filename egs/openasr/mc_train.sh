@@ -4,17 +4,18 @@ suffix=""
 start_iter=100
 noise="mixed"
 
-noisesets=/home/feiteng/openasr/datanoise/noisesets/combined/train
+noisesets=asr-noisesets/combined/train
 
 egs_dir=""
 skip_train=false
 skip_decode=false
 
-stage=0
-train_stage=0
+stage=10
+train_stage=10
 srcdata=datanoise/trainsets/openasr500
 num_epochs=2
 exit_stage=
+get_egs_stage=0
 
 # gpus="0 1 2 3 4 5 6 7"
 # nnet_jobs=8
@@ -26,7 +27,7 @@ cleandir=exp/chain/tdnn_sp
 src_egs_combine=""
 srciter=3000
 
-egs_opts="--nj 6 --max-shuffle-jobs-run 10"
+egs_opts="--nj 10 --max-shuffle-jobs-run 40"
 sort_egs_combine=true
 percent=""
 combine_egs_opts="--sort"
@@ -38,6 +39,9 @@ fix_layer_opts=""
 
 deep_egs=false
 decode_iters="final"
+dir=
+decode_clean=true
+decode_nnv=true
 
 . ./cmd.sh
 . ./path.sh
@@ -53,155 +57,183 @@ tree_dir=exp/chain/tri3_tree
 
 mfccdir=datanoise/trainsets/mfcc_hires
 
-# for snr in -15 -10 -5 0 5 10 15 20 25 30 35;do
-for snr in 15;do
-    echo "Start Training for SNR $snr"
-
-    dir=exp/chainnoise/tdnn_sp_snr${snr}_nois_${noise}$suffix
+if [ -z $dir ];then
+    dir=exp/chain/tdnn_sp_snr-5to30
     mkdir -p $dir
+fi
 
-    if $deep_egs;then
-        combined_lat_dir=exp/tri3_noise_combined_lats
-        combined_data_dir=datanoise/trainsets/combine_snr-10to15
-        if [ -z $egs_dir ];then
-            lat_dirs=""
-            # if [ ! -d $combined_data_dir ];then
-            if true;then
-                data_dirs=""
-                
-                for snr in -10 -5 0 5 10 15;do
-                    # suffix data_dir lat_dir
-                    # utils/data/copy_data_dir.sh --utt-suffix "_snr${snr}" datanoise/trainsets/openasr500-snr${snr}-noise-mixed tmp/openasr500-snr${snr}-noise-mixed
-                    # utils/data/copy_lat_dir.sh --utt-suffix "_snr${snr}" exp/tri3_all_lats tmp/tri3_snr${snr}_lats || exit 1;
-                    data_dirs="$data_dirs tmp/openasr500-snr${snr}-noise-mixed"
-                    lat_dirs="$lat_dirs tmp/tri3_snr${snr}_lats"
-                done
-                # utils/data/combine_data.sh $combined_data_dir $data_dirs || exit 1;
-                # steps/combine_lat_dirs.sh $combined_data_dir $combined_lat_dir $lat_dirs || exit 1;
-            fi
-            # utils/data/copy_data_dir.sh --utt-suffix "_snr_clean" datanoise/trainsets/openasr500 datanoise/trainsets/openasr500_snr_clean
-            # utils/data/copy_lat_dir.sh --utt-suffix "_snr_clean" exp/tri3_all_lats tmp/tri3_snr_clean_lats || exit 1;
-
-            # utils/data/combine_data.sh ${combined_data_dir}_clean $combined_data_dir datanoise/trainsets/openasr500_snr_clean || exit 1;
-            steps/combine_lat_dirs.sh ${combined_data_dir}_clean ${combined_lat_dir}_clean $lat_dirs exp/tri3_all_lats || exit 1;
-        fi
-        echo "train_data_dir=${combined_data_dir}_clean" >$dir/vars
-        echo "lat_dir=${combined_lat_dir}_clean" >>$dir/vars
-    else
-        train_set=${srcdata}-snr$[$snr]-noise-$noise
-        echo "train_data_dir=$train_set" >$dir/vars
-        echo "lat_dir=exp/tri3_all_lats" >>$dir/vars
-        if [ -z $egs_dir ];then
-            if $sort_egs_combine;then
-                if [ ! -f $dir/egs_combine/.done ];then 
-                    snr_egs_dirs=""
-                    for snr in -10 -5 0 5 10 15;do #for snr in -15 -10 -5 0 5 10 15;do
-                        snr_egs_dirs="$snr_egs_dirs exp/chainnoise/tdnn_sp_snr${snr}_nois_mixed_hour500_accan/egs"
-                    done
-
-                    steps/nnet3/combine_egs.py $combine_egs_opts --percent "$percent" $combine_egs_opts $snr_egs_dirs $dir/egs_combine >&$dir/egs_combine.log || exit 1;
-                fi
-                egs_dir=$dir/egs_combine
-            fi
-        fi
-
-        if [ -z $egs_dir ];then
-            if [ ! -f $dir/egs_combine/.done ];then
-                echo "Combine Egs: $srcdir/egs(_combine) + $dir/egs -> $dir/egs_combine"
-                if [ -f $srcdir/egs_combine/.done ];then
-                    steps/nnet3/combine_egs.py $srcdir/egs_combine $dir/egs $dir/egs_combine || exit 1;
-                elif [ ! -z $src_egs_combine ];then
-                    steps/nnet3/combine_egs.py $src_egs_combine $dir/egs $dir/egs_combine || exit 1;
-                else
-                    steps/nnet3/combine_egs.py $srcdir/egs $dir/egs $dir/egs_combine || exit 1;
-                fi
-            else
-                echo "Egs exist at: $dir/egs_combine"
-            fi
-            egs_dir=$dir/egs_combine
-        fi
-
-        if [ -f $egs_dir/.done ];then
-            echo "Use Egs: $egs_dir"
-            sleep 5
-        elif [ -f $dir/egs/.done ];then
-            egs_dir=$dir/egs
-        else
-            echo "Cann't Find Egs!"
-            exit 1;
-        fi
+if [[ $stage -le 0 && -z $egs_dir ]];then
+    if [ ! -d datanoise/trainsets/openasr1000 ];then
+        utils/subset_data_dir.sh data/openasr-01-train_sp_min1.55_hires 1000000 datanoise/trainsets/openasr1000_hires || exit 1;
+        utils/subset_data_dir.sh data/openasr-01-train_sp 1000000 datanoise/trainsets/openasr1000 || exit 1;
+        utils/fix_data_dir.sh datanoise/trainsets/openasr1000 || exit 1;
+        utils/subset_data_dir.sh data/voxpop-train_sp_hires 500000 datanoise/trainsets/voxpop500 || exit 1;
+        utils/fix_data_dir.sh datanoise/trainsets/voxpop500 || exit 1;
     fi
+    echo "准备NoiseData"
+    dir_suffix="_SNR-5to30"
+    gmm_dir=exp/tri3
 
-    cp exp/chainnoise/tdnn_sp_snr15_nois_mixed_hour500_accan_shuffleegs_snr-15to15/den.fst $dir || exit 1;
+    telis_combined_lat_dir=exp/tri3_lats_TELIS_NOISE_CLEAN$dir_suffix
+    telis_combined_data_dir=datanoise/trainsets/TELIS_NOISE_CLEAN$dir_suffix
+    if [ $stage -le -1 ];then
+        # # scp -r feiteng@192.168.10.231:/home/feiteng/openasr/exp/tri3_telis1_lats exp || exit 1;
+        # rm -rf datanoise/trainsets/telis datanoise/trainsets/telis_sp
+        # utils/copy_data_dir.sh asr-trainsets/telis-asr-train-v2/ datanoise/trainsets/telis
+
+        # Telis more snr data
+        lat_dirs="exp/tri3_telis1_sp_lats"
+        data_dirs="datanoise/trainsets/telis_sp"
+        # # data SP make_mfcc
+        # utils/data/perturb_data_dir_speed_3way.sh datanoise/trainsets/telis datanoise/trainsets/telis_sp
+        # utils/data/perturb_data_dir_volume.sh datanoise/trainsets/telis_sp || exit 1;
+        x=telis_sp
+        if [ $stage -le -2 ]; then
+            
+            ali_dir=exp/tri3_telis1_sp_ali
+            lat_dir=exp/tri3_telis1_sp_lats
+
+            data_dir=datanoise/trainsets/telis_sp_mfcc
+            utils/copy_data_dir.sh datanoise/trainsets/telis_sp datanoise/trainsets/telis_sp_mfcc || exit 1;
+            steps/make_mfcc.sh --nj 10 --mfcc-config conf/mfcc.conf $data_dir || exit 1;
+            steps/compute_cmvn_stats.sh $data_dir || exit 1;
+            # realigning data as the segments would have changed
+            steps/align_fmllr.sh --nj 10 $data_dir data/lang $gmm_dir ${ali_dir} || exit 1;
+            nj=$(cat ${ali_dir}/num_jobs) || exit 1;
+            steps/align_fmllr_lats.sh --nj 10 $data_dir data/lang $gmm_dir $lat_dir || exit 1;
+        fi
+
+        for snr in -5 0 5 10 15 20 25 30;do
+            dir_suffix="_SNR$snr"
+            # rm -rf tmp/$x$dir_suffix
+            # local/noise/addnoise.py --snr-db $snr --noise "mixed" --noise-data-dir $noisesets \
+            #     --input-data-dir datanoise/trainsets/$x --output-data-dir tmp/$x$dir_suffix || exit 1;
+            # rm -rf datanoise/trainsets/$x$dir_suffix || exit 1;
+            # utils/data/copy_data_dir.sh --utt-suffix "$dir_suffix" tmp/$x$dir_suffix \
+            #     datanoise/trainsets/$x$dir_suffix || exit 1;
+
+            utils/data/copy_lat_dir.sh --utt-suffix "$dir_suffix" exp/tri3_telis1_sp_lats exp/tri3_lats_${x}$dir_suffix || exit 1;
+
+            data_dirs="$data_dirs datanoise/trainsets/$x$dir_suffix"
+            lat_dirs="$lat_dirs exp/tri3_lats_${x}$dir_suffix"
+        done
+
+        # for x in $data_dirs;do
+        #     if [ ! -f $x/cmvn.scp ];then
+        #         steps/make_mfcc.sh --nj 10 --mfcc-config conf/mfcc_hires.conf $x || exit 1;
+        #         steps/compute_cmvn_stats.sh $x || exit 1;
+        #     fi
+        # done
+
+        # utils/data/combine_data.sh --skip-fix true $telis_combined_data_dir $data_dirs || exit 1;
+        steps/combine_lat_dirs.sh $telis_combined_data_dir $telis_combined_lat_dir $lat_dirs || exit 1;
+    fi
+    # exit 0;
+
+    # # # utils/subset_data_dir.sh data/openasr-01-train_sp 1000000 datanoise/trainsets/openasr1000_sp
+    # # # utils/subset_data_dir.sh data/voxpop-train_sp 500000 datanoise/trainsets/voxpop500_sp
+    # # utils/copy_data_dir.sh data/openasr-01-train_sp datanoise/trainsets/openasr1000_sp || exit 1;
+    # utils/copy_data_dir.sh data/voxpop-train_sp datanoise/trainsets/voxpop500_sp || exit 1;
+    # for x in openasr1000 voxpop500;do
+    #     utils/copy_data_dir.sh tmp/$x$dir_suffix datanoise/trainsets/${x}_hires || exit 1;
+    #     cp datanoise/trainsets/${x}_hires/text datanoise/trainsets/${x}_sp || exit 1;
+    #     utils/fix_data_dir.sh datanoise/trainsets/${x}_sp || exit 1;
+
+    #     lat_dir=exp/tri3_lats_${x}_hires
+    #     steps/align_fmllr_lats.sh --nj 40 datanoise/trainsets/${x}_sp data/lang $gmm_dir $lat_dir || exit 1;
+    # done
+    # # exit 0;
+
+    combined_lat_dir=exp/tri3_lats_DATA2000_NOISE_CLEAN$dir_suffix
+    combined_data_dir=datanoise/trainsets/DATA2000_NOISE_CLEAN$dir_suffix
+
+    # lat_dirs="$telis_combined_lat_dir exp/tri3_lats_openasr1000_sp exp/tri3_lats_voxpop500_sp"
+    lat_dirs="$telis_combined_lat_dir exp/tri3_lats_openasr1000_hires exp/tri3_lats_voxpop500_hires"
+    data_dirs="$telis_combined_data_dir datanoise/trainsets/openasr1000_hires datanoise/trainsets/voxpop500_hires"
+    
+    for x in openasr1000 voxpop500;do
+        # local/noise/addnoise.py --snr-db-range \"-5,30\" --noise "mixed" --noise-data-dir $noisesets \
+        #     --input-data-dir datanoise/trainsets/$x --output-data-dir tmp/$x$dir_suffix || exit 1;
+        # utils/data/copy_data_dir.sh --utt-suffix "$dir_suffix" tmp/$x$dir_suffix \
+        #     datanoise/trainsets/$x$dir_suffix || exit 1;
+
+        # steps/make_mfcc.sh --nj 10 --mfcc-config conf/mfcc_hires.conf datanoise/trainsets/$x$dir_suffix || exit 1;
+        # steps/compute_cmvn_stats.sh datanoise/trainsets/$x$dir_suffix || exit 1;
+        # rm -rf exp/tri3_lats_${x}$dir_suffix
+        # utils/data/copy_lat_dir.sh --utt-suffix "$dir_suffix" exp/tri3_lats_${x}_hires exp/tri3_lats_${x}$dir_suffix || exit 1;
+        data_dirs="$data_dirs datanoise/trainsets/$x$dir_suffix"
+        lat_dirs="$lat_dirs exp/tri3_lats_${x}$dir_suffix"
+    done
+
+    utils/data/combine_data.sh --skip-fix false $combined_data_dir $data_dirs || exit 1;
+    # steps/combine_lat_dirs.sh $combined_data_dir $combined_lat_dir $lat_dirs || exit 1;
+
+    echo "train_data_dir=${combined_data_dir}" >$dir/vars
+    echo "lat_dir=${combined_lat_dir}" >>$dir/vars
+fi
+
+if [ $stage -le 1 ];then
     bash copy_train_dir.sh --fix-layer "$fix_layer_opts" --iter $srciter --start-iter $start_iter $srcdir $dir
+fi
 
-    if [[ $stage -le 10 && ! -f $dir/final.mdl ]];then
-        bash local/chain/run_tdnn.sh --stage 10 --train-stage $train_stage --exit-stage "$exit_stage" \
-            --adapt-stage $start_iter --cleanup true \
-            --gpus "$gpus" --nnet-jobs $nnet_jobs --tree-dir $tree_dir \
-            --frame-subsampling-factor 3 --pruner-perlayer 0 --pruner-times "" \
-            --initial-effective-lrate $initial_effective_lrate --final-effective-lrate $final_effective_lrate \
-            --extra-egs-dirs "" --get-egs-stage 0 --num-epochs $num_epochs --common-egs-dir "$egs_dir" --dir $dir || exit 1;
-    fi
-    # echo "496666" | sudo -S nvidia-smi -c 0
-    cmvn_scp=data/train_sp_min1.55_hires/cmvn.scp.sub10k
-    # sort -r $data/$train/cmvn.scp | head -n 10000 >$cmvn_scp
-    graph_dir=exp/chain/tdnn/graph_tg
+if [[ $stage -le 10 && ! -f $dir/final.mdl ]];then
+    bash local/chain/run_tdnn.sh --stage 10 --train-stage $train_stage --exit-stage "$exit_stage" \
+        --adapt-stage $start_iter --cleanup true \
+        --gpus "$gpus" --nnet-jobs $nnet_jobs --tree-dir $tree_dir \
+        --frame-subsampling-factor 3 --pruner-perlayer 0 --pruner-times "" \
+        --initial-effective-lrate $initial_effective_lrate --final-effective-lrate $final_effective_lrate \
+        --extra-egs-dirs "" --get-egs-stage $get_egs_stage --egs-opts "$egs_opts" \
+        --egs-context-opts "--egs.chunk-right-context 6 --egs.chunk-left-context 6" \
+        --num-epochs $num_epochs --common-egs-dir "$egs_dir" --dir $dir || exit 1;
+fi
 
-    echo "496666" | sudo -S nvidia-smi -c 0
+# echo "496666" | sudo -S nvidia-smi -c 0
+cmvn_scp=data/train_sp_min1.55_hires/cmvn.scp.sub10k
+# sort -r $data/$train/cmvn.scp | head -n 10000 >$cmvn_scp
+graph_dir=exp/chain/tdnn/graph_tg
 
-    if ! $skip_decode;then
-        (
-            for snr in -15 -5 0 5 10 15;do
-                snr_sets="snr$snr-noise-mixed"
-                for decode_iter in $decode_iters;do
-                    bash local/decode/online_decode.sh --decode-nj 1 --graph-dir $graph_dir \
-                        --data datanoise/testsets --decode-iter $decode_iter \
-                        --online-cmvn-opts " --online-cmvn true --cmvn-scp $cmvn_scp " \
-                        --feat-config "--feature-type mfcc --mfcc-config conf/mfcc_hires.conf"  \
-                        --decode-suffix "" --chain true --scoring-opts "--min-lmwt 5 " \
-                        --decode-sets "$snr_sets" --decode-opts "--stage 0" \
-                        $dir &
-                done
-                sleep 50
-            done
-            wait
+echo "496666" | sudo -S nvidia-smi -c 0
 
-            # for snr in 0 15 20 25;do
-            for snr in 20 25;do
-                snr_sets="snr$snr-noise-mixed"
-                for decode_iter in $decode_iters;do
-                    bash local/decode/online_decode.sh --decode-nj 2 --graph-dir $graph_dir \
-                        --data datanoise/testsets --decode-iter $decode_iter \
-                        --online-cmvn-opts " --online-cmvn true --cmvn-scp $cmvn_scp " \
-                        --feat-config "--feature-type mfcc --mfcc-config conf/mfcc_hires.conf"  \
-                        --decode-suffix "" --chain true --scoring-opts "--min-lmwt 5 " \
-                        --decode-sets "$snr_sets" --decode-opts "--stage 0" \
-                        $dir &
-                done
-                sleep 50
-            done
-
+if ! $skip_decode;then
+    (
+        for snr in 0 10 20 30;do
+            snr_sets="telis2-asr-test-data-snr$snr"
+            decode_nj=8
+            if $decode_nnv;then
+                decode_nj=4
+                snr_sets="$snr_sets Jan-09-2015-nnv-readaloud-snr$snr "
+            fi
             for decode_iter in $decode_iters;do
-                bash local/decode/online_decode.sh --decode-nj 2 --graph-dir $graph_dir \
-                    --data datanoise/testsets --decode-iter $decode_iter \
+                bash local/decode/online_decode.sh --decode-nj $decode_nj --graph-dir $graph_dir \
+                    --data asr-testsets/eng --decode-iter $decode_iter \
                     --online-cmvn-opts " --online-cmvn true --cmvn-scp $cmvn_scp " \
-                    --feat-config "--feature-type mfcc --mfcc-config conf/mfcc_hires.conf"  \
+                    --feat-config "--feature-type mfcc --mfcc-config conf/mfcc_hires_decode.conf"  \
                     --decode-suffix "" --chain true --scoring-opts "--min-lmwt 5 " \
-                    --decode-sets "clean" --decode-opts "--stage 0" \
+                    --decode-sets "$snr_sets" --decode-opts "--stage 0" \
                     $dir &
             done
-            wait
-        )
-        echo "Decode DONE!"
+            sleep 50
+        done
 
-    fi
+        if $decode_clean;then
+            decode_sets="Jan-09-2015-nnv-readaloud telis2-asr-test-data"
+            for decode_iter in $decode_iters;do
+                bash local/decode/online_decode.sh --decode-nj 4 --graph-dir $graph_dir \
+                    --data asr-testsets/eng --decode-iter $decode_iter \
+                    --online-cmvn-opts " --online-cmvn true --cmvn-scp $cmvn_scp " \
+                    --feat-config "--feature-type mfcc --mfcc-config conf/mfcc_hires_decode.conf"  \
+                    --decode-suffix "" --chain true --scoring-opts "--min-lmwt 5 " \
+                    --decode-sets "$decode_sets" --decode-opts "--stage 0" \
+                    $dir &
+            done
+        fi
+        wait
+    )
+    echo "Decode DONE!"
+fi
 
-    wait
-done
-
-kill $(jobs -p)
 
 echo "$0: DONE!"
 
 exit 0;
+
