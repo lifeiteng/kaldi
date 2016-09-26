@@ -36,7 +36,7 @@ if [ ! -f $data/spk2utt ];then
   exit 1;
 fi
 
-mkdir -p $dest;
+mkdir -p $dest/log;
 rm $dest/{lat.*.gz,num_jobs} 2>/dev/null
 
 export LC_ALL=C
@@ -105,7 +105,10 @@ for i in `seq 1 $num_jobs`; do
 percent = 100.0 * float($num_lines) / $num_lines_tot
 if percent < 90 :
   print ('$dest/lat.$i.gz {0}% utterances missing.'.format(percent))"  || exit 1;
-done
+done >$dest/log/check.log
+
+cat $dest/log/check.log
+
 rm -r $temp_dir 2>/dev/null
 
 echo "Combined lattices and stored in $dest"

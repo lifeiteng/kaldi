@@ -8,15 +8,19 @@ from optparse import OptionParser
 reload(sys)
 sys.setdefaultencoding("utf-8")
 
-usage = '%prog --option value'
+usage = '%prog [-L|-V] dict text text.clean'
 parser = OptionParser(usage)
-parser.add_option('--lower', dest='lower', default=False)
-parser.add_option('--clean-oov', dest='oov', default=False)
+parser.add_option('-L', '--lower', dest='lower', action="store_true", default=False)
+parser.add_option('-V', '--clean-oov', dest='oov', action="store_true", default=False)
 
 (opt, argv) = parser.parse_args()
 
-to_lower = (opt.lower == 'True')
-rm_oov = (opt.oov == 'True')
+if len(argv) != 3:
+    parser.print_help()
+    exit(1)
+
+to_lower = opt.lower
+rm_oov = opt.oov
 
 if rm_oov:
     assert len(argv) == 3

@@ -58,6 +58,7 @@ cleanup=true
 keep_model_iters=1
 remove_egs=false
 src_model=  # will default to $degs_dir/final.mdl
+cv_period=10
 
 left_deriv_truncate=   # number of time-steps to avoid using the deriv of, on the left.
 right_deriv_truncate=  # number of time-steps to avoid using the deriv of, on the right.
@@ -211,34 +212,35 @@ deriv_time_opts=
 while [ $x -lt $num_iters ]; do
   if [ $stage -le $x ]; then
     if $run_diagnostics; then
-      # Set off jobs doing some diagnostics, in the background.  # Use the egs dir from the previous iteration for the diagnostics
-      $cmd $dir/log/compute_objf_valid.$x.log \
-        nnet3-discriminative-compute-objf  $regularization_opts \
-        --silence-phones=$silphonelist \
-        --criterion=$criterion --drop-frames=$drop_frames \
-        --one-silence-class=$one_silence_class \
-        --boost=$boost --acoustic-scale=$acoustic_scale \
-        $dir/$x.mdl \
-        ark:$degs_dir/valid_diagnostic.degs &
-      $cmd $dir/log/compute_objf_train.$x.log \
-        nnet3-discriminative-compute-objf  $regularization_opts \
-        --silence-phones=$silphonelist \
-        --criterion=$criterion --drop-frames=$drop_frames \
-        --one-silence-class=$one_silence_class \
-        --boost=$boost --acoustic-scale=$acoustic_scale \
-        $dir/$x.mdl \
-        ark:$degs_dir/train_diagnostic.degs &
+      if [ $[$x%${cv_period}] -eq 0 ];then
+        # Set off jobs doing some diagnostics, in the background.  # Use the egs dir from the previous iteration for the diagnostics
+        $cmd $dir/log/compute_objf_valid.$x.log \
+          nnet3-discriminative-compute-objf  $regularization_opts \
+          --silence-phones=$silphonelist \
+          --criterion=$criterion --drop-frames=$drop_frames \
+          --one-silence-class=$one_silence_class \
+          --boost=$boost --acoustic-scale=$acoustic_scale \
+          $dir/$x.mdl \
+          ark:$degs_dir/valid_diagnostic.degs &
+        $cmd $dir/log/compute_objf_train.$x.log \
+          nnet3-discriminative-compute-objf  $regularization_opts \
+          --silence-phones=$silphonelist \
+          --criterion=$criterion --drop-frames=$drop_frames \
+          --one-silence-class=$one_silence_class \
+          --boost=$boost --acoustic-scale=$acoustic_scale \
+          $dir/$x.mdl \
+          ark:$degs_dir/train_diagnostic.degs &
+      fi
     fi
     
-    if [ $x -gt 0 ]; then
+    if [ $[$x%${cv_period}] -eq 0 ];then
       $cmd $dir/log/progress.$x.log \
         nnet3-show-progress --use-gpu=no "nnet3-am-copy --raw=true $dir/$[$x-1].mdl - |" "nnet3-am-copy --raw=true $dir/$x.mdl - |" \
         '&&' \
         nnet3-info "nnet3-am-copy --raw=true $dir/$x.mdl - |" &
     fi
 
-
-    echo "Training neural net (pass $x)"
+    echo "Training neural net `date` (pass $x / $num_iters)"
       
     cache_read_opt="--read-cache=$dir/cache.$x"
     
@@ -371,10 +373,10 @@ fi
 
 if $cleanup; then
   echo Removing most of the models
-  for x in `seq 1 $keep_model_iters $num_iters`; do
-    if [ -z "${iter_to_epoch[$x]}" ]; then
-      # if $x is not an epoch-final iteration..
-      rm $dir/$x.mdl 2>/dev/null
+  for x in `seq 0 $num_iters`; do
+    if [ $[$x%100] -ne 0 ] && [ $x -ne $num_iters ] && [ -f $dir/$x.mdl ] && [ -z "${iter_to_epoch[$x]}" ] ; then
+       # delete all but every 100th model; don't delete the ones which combine to form the final model.
+      rm $dir/$x.mdl
     fi
   done
 fi

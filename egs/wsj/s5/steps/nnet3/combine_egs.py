@@ -27,6 +27,7 @@ logger.info('Starting combine_egs.py')
 def GetArgs():
     usage = '%prog egs-dir-1 egs-dir-2 egs-dir-3 combined-egs-dir'
     parser = OptionParser(usage)
+    parser.add_option('-T', '--test', dest='test', action='store_true', default=False)
     parser.add_option('--sort', dest='sort', action='store_true', default=False)
     parser.add_option('--sort-reverse', dest='sort_reverse', action='store_true', default=False)
     parser.add_option('--random-seed', dest='seed', type=int, default=None)
@@ -91,11 +92,18 @@ def Combine(args, opt):
                     continue
             num_copy_mv += 1
             aidx = combine_numbers.pop()
-            logger.info("Move/Copy {0}/cegs.{1}.ark -> {2}/cegs.{3}.ark".format(args[e], i, combine_egs_dir, aidx))
+            if not opt.test:
+                logger.info("Move/Copy {0}/cegs.{1}.ark -> {2}/cegs.{3}.ark".format(args[e], i, combine_egs_dir, aidx))
             if args[e].find('combine') < 0 or opt.copy:
-                shutil.copy("{0}/cegs.{1}.ark".format(args[e], i), "{0}/cegs.{1}.ark".format(combine_egs_dir, aidx))
+                if opt.test:
+                    print("cp {0}/cegs.{1}.ark {2}/cegs.{3}.ark".format(args[e], i, combine_egs_dir, aidx))
+                else:
+                    shutil.copy("{0}/cegs.{1}.ark".format(args[e], i), "{0}/cegs.{1}.ark".format(combine_egs_dir, aidx))
             else:
-                shutil.move("{0}/cegs.{1}.ark".format(args[e], i), "{0}/cegs.{1}.ark".format(combine_egs_dir, aidx))
+                if opt.test:
+                    print("mv {0}/cegs.{1}.ark {2}/cegs.{3}.ark".format(args[e], i, combine_egs_dir, aidx))
+                else:
+                    shutil.move("{0}/cegs.{1}.ark".format(args[e], i), "{0}/cegs.{1}.ark".format(combine_egs_dir, aidx))
         logger.info("[ Origin %d == Copy/Mv %d ]" % (num_archives_keeped[e], num_copy_mv))
         assert num_copy_mv == num_archives_keeped[e]
 

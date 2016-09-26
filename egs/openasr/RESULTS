@@ -2,6 +2,7 @@
 
 
 exp="exp/chainnoise"
+lm=
 
 . ./path.sh
 . ./utils/parse_options.sh
@@ -16,7 +17,7 @@ for x in $exp/dnn*/*decode*; do
 done
 
 for x in $exp/*/*decode*; do
-	[ -d $x ] && grep WER $x/wer_* 2>/dev/null | grep -v wer_correct | utils/best_wer.sh; 
+	[ -d $x ] && grep WER $x/wer_* 2>/dev/null | grep -v wer_correct | grep "wer_$lm" | utils/best_wer.sh; 
 done
 
 exit 0
