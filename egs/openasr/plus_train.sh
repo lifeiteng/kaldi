@@ -17,6 +17,8 @@ nj=20
 exit_stage=
 gpus="0 1 2 3"
 nnet_jobs=4
+nnet_jobs_initial=0
+nnet_jobs_final=0
 
 pruner_opts="--pruner-perlayer 0 --pruner-times \"\"" # --pruner-perlayer 1 --pruner-times 0.4
 splice_indexes="-1,0,1 -1,0,1,2 -3,0,3 -3,0,3 -3,0,3 -6,-3,0 0"
@@ -171,12 +173,20 @@ if ! $quinphone;then
 fi
 
 if [ $stage -le 10 ]; then
+    if [ $nnet_jobs_initial -eq 0 ];then
+        nnet_jobs_initial=$nnet_jobs
+    fi
+    if [ $nnet_jobs_final -eq 0 ];then
+        nnet_jobs_final=$nnet_jobs
+    fi
+
     bash local/chain/run_tdnn.sh \
         --splice-indexes "$splice_indexes" \
         --stage $run_train_stage --train-stage $train_stage --exit-stage "$exit_stage" \
         --adapt-stage $start_iter --cleanup true --mini-batch 128 \
         --bottleneck-dim $bottleneck_dim \
-        --gpus "$gpus" --nnet-jobs $nnet_jobs $tree_dir_opts $tree_suffix --tree-context-opts "$tree_context_opts" \
+        --gpus "$gpus" --nnet-jobs-initial  $nnet_jobs_initial --nnet-jobs-final $nnet_jobs_final \
+        $tree_dir_opts $tree_suffix --tree-context-opts "$tree_context_opts" \
         --frame-subsampling-factor 3 $pruner_opts \
         --initial-effective-lrate $initial_effective_lrate --final-effective-lrate $final_effective_lrate \
         --extra-egs-dirs "" --get-egs-stage 0 --num-epochs $num_epochs --common-egs-dir "$egs_dir" --dir $dir || exit 1;
