@@ -40,8 +40,6 @@ mkdir -p $dest;
 
 rm $dest/{ali.*.gz,num_jobs} 2>/dev/null
 
-cp $first_src/phones.txt $dest || exit 1;
-
 export LC_ALL=C
 
 for dir in $*; do

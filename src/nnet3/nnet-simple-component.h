@@ -600,8 +600,8 @@ class RepeatedAffineComponent: public UpdatableComponent {
   virtual void UnVectorize(const VectorBase<BaseFloat> &params);
 
   // Some functions that are specific to this class.
-  const CuVector<BaseFloat> &BiasParams() { return bias_params_; }
-  const CuMatrix<BaseFloat> &LinearParams() { return linear_params_; }
+  const CuVector<BaseFloat> &BiasParams() const { return bias_params_; }
+  const CuMatrix<BaseFloat> &LinearParams() const { return linear_params_; }
   explicit RepeatedAffineComponent(const RepeatedAffineComponent &other);
 
   void Init(int32 input_dim, int32 output_dim, int32 num_repeats,
@@ -813,6 +813,11 @@ class FixedAffineComponent: public Component {
 
   virtual std::string Type() const { return "FixedAffineComponent"; }
   virtual std::string Info() const;
+
+  // Copy constructor from AffineComponent-- can be used when we're done
+  // training a particular part of the model and want to efficiently disable
+  // further training.
+  FixedAffineComponent(const AffineComponent &c);
 
   /// matrix should be of size input-dim+1 to output-dim, last col is offset
   void Init(const CuMatrixBase<BaseFloat> &matrix);
@@ -1116,7 +1121,7 @@ class ClipGradientComponent: public Component {
   BaseFloat self_repair_scale_;  // constant scaling the self-repair vector
   std::string debug_info_;   // component-node name, used in the destructor to
                              // print out stats of self-repair
-  
+
   // this function is called from Backprop code, and only does something if the
   // self-repair-scale config value is set and the current clipped proportion
   // exceeds the threshold. What it does is to add a term to in-deriv that
@@ -1598,8 +1603,8 @@ class ConvolutionComponent: public UpdatableComponent {
   // Some functions that are specific to this class.
   void SetParams(const VectorBase<BaseFloat> &bias,
                  const MatrixBase<BaseFloat> &filter);
-  const CuVector<BaseFloat> &BiasParams() { return bias_params_; }
-  const CuMatrix<BaseFloat> &LinearParams() { return filter_params_; }
+  const CuVector<BaseFloat> &BiasParams() const { return bias_params_; }
+  const CuMatrix<BaseFloat> &LinearParams() const { return filter_params_; }
   void Init(int32 input_x_dim, int32 input_y_dim, int32 input_z_dim,
             int32 filt_x_dim, int32 filt_y_dim,
             int32 filt_x_step, int32 filt_y_step, int32 num_filters,
