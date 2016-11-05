@@ -363,6 +363,33 @@ void ScaleNnet(BaseFloat scale, Nnet *nnet) {
   }
 }
 
+void AddNnetComponents(const Nnet &src, const Vector<BaseFloat> &alphas,
+                       BaseFloat scale, Nnet *dest) {
+  if (src.NumComponents() != dest->NumComponents())
+    KALDI_ERR << "Trying to add incompatible nnets.";
+  int32 i = 0;
+  for (int32 c = 0; c < src.NumComponents(); c++) {
+    const Component *src_comp = src.GetComponent(c);
+    Component *dest_comp = dest->GetComponent(c);
+    if (src_comp->Properties() & kUpdatableComponent) {
+      // For now all updatable components inherit from class UpdatableComponent.
+      // If that changes in future, we will change this code.
+      const UpdatableComponent *src_uc =
+          dynamic_cast<const UpdatableComponent*>(src_comp);
+      UpdatableComponent *dest_uc =
+          dynamic_cast<UpdatableComponent*>(dest_comp);
+      if (src_uc == NULL || dest_uc == NULL)
+        KALDI_ERR << "Updatable component does not inherit from class "
+            "UpdatableComponent; change this code.";
+      KALDI_ASSERT(i < alphas.Dim());
+      dest_uc->Add(alphas(i++), *src_uc);
+    } else { // add stored stats
+      dest_comp->Add(scale, *src_comp);
+    }
+  }
+  KALDI_ASSERT(i == alphas.Dim());
+}
+
 void AddNnet(const Nnet &src, BaseFloat alpha, Nnet *dest) {
   if (src.NumComponents() != dest->NumComponents())
     KALDI_ERR << "Trying to add incompatible nnets.";
@@ -508,6 +535,15 @@ std::string NnetInfo(const Nnet &nnet) {
   return ostr.str();
 }
 
+void SetDropoutProportion(BaseFloat dropout_proportion,
+                          Nnet *nnet) {
+  for (int32 c = 0; c < nnet->NumComponents(); c++) {
+    Component *comp = nnet->GetComponent(c);
+    DropoutComponent *dc = dynamic_cast<DropoutComponent*>(comp);
+    if (dc != NULL)
+      dc->SetDropoutProportion(dropout_proportion);
+  }
+}
 
 void FindOrphanComponents(const Nnet &nnet, std::vector<int32> *components) {
   int32 num_components = nnet.NumComponents(), num_nodes = nnet.NumNodes();
