@@ -592,11 +592,11 @@ def Train(args, run_opts):
     num_jobs = train_lib.GetNumberOfJobs(args.tree_dir)
     feat_dim = train_lib.GetFeatDim(args.feat_dir)
     ivector_dim = train_lib.GetIvectorDim(args.online_ivector_dir)
-
-    # split the training data into parts for individual jobs
-    # we will use the same number of jobs as that used for alignment
-    train_lib.SplitData(args.feat_dir, num_jobs)
-    shutil.copy('{0}/tree'.format(args.tree_dir), args.dir)
+    if (args.stage <= -7):
+        # split the training data into parts for individual jobs
+        # we will use the same number of jobs as that used for alignment
+        train_lib.SplitData(args.feat_dir, num_jobs)
+        shutil.copy('{0}/tree'.format(args.tree_dir), args.dir)
     f = open('{0}/num_jobs'.format(args.dir), 'w')
     f.write(str(num_jobs))
     f.close()
@@ -691,6 +691,8 @@ def Train(args, run_opts):
                                                    num_hidden_layers, num_archives_expanded,
                                                    args.max_models_combine, args.add_layers_period,
                                                    args.num_jobs_final)
+    if num_iters_combine > 1000:
+        num_iters_combine = 1000
 
     learning_rate = lambda iter, current_num_jobs, num_archives_processed: train_lib.GetLearningRate(iter, current_num_jobs, num_iters,
                                                                                            num_archives_processed,
@@ -703,8 +705,15 @@ def Train(args, run_opts):
                                         num_iters,
                                         args.num_jobs_initial,
                                         args.num_jobs_final)
+        for k in range(0, len(pruner_iters)):
+            if num_iters - num_iters_combine <= pruner_iters[k]:
+                logger.warning("Prune: pruner_iters[k] >= num_iters - num_iters_combine, reduce it.")
+                if args.stage < num_iters - num_iters_combine - 200:
+                    pruner_iters[k] = max(num_iters - num_iters_combine - 200, args.stage)
+                else:
+                    # assert args.stage < num_iters - num_iters_combine - 1
+                    pruner_iters[k] = num_iters - num_iters_combine - 1
         logger.info("Prune at iters " + ' '.join([str(v) for v in pruner_iters]))
-        assert(num_iters - num_iters_combine > pruner_iters[-1])
 
     logger.info("Will keep model from iter {0}".format(num_iters - num_iters_combine + 1))
     logger.info("Training will run for {0} epochs = {1} iterations".format(args.num_epochs, num_iters))

@@ -102,11 +102,6 @@ fi
 
 mkdir -p $dir
 
-cat > $dir/vars <<EOF
-train_data_dir=data/train_combine_data2000$suffix
-lat_dir=$combined_lat_dir
-EOF
-
 if [ $stage -eq 160926 ]; then
     echo "准备LibriSpeech Data"
     # # wget www.openslr.org/resources/11/librispeech-lexicon.txt 
@@ -145,8 +140,8 @@ if [ $stage -eq 160926 ]; then
     # # awk '{k=$1; $1=""; print k " " tolower($0);}' tmp/text >data/librispeech_train/text
     nj=10
     data_dir=data/librispeech_train
-    local/data/clean_trans.py -L -V data/lang_librispeech/words.txt ${data_dir}/text ${data_dir}/text || exit 1;
-    utils/fix_data_dir.sh data/librispeech_train || exit 1;
+    # local/data/clean_trans.py -L -V data/lang_librispeech/words.txt ${data_dir}/text ${data_dir}/text || exit 1;
+    # utils/fix_data_dir.sh data/librispeech_train || exit 1;
 
     # steps/make_mfcc.sh --mfcc-config conf/mfcc.conf --nj $nj $data_dir || exit 1;
     # steps/compute_cmvn_stats.sh $data_dir || exit 1;
@@ -155,27 +150,26 @@ if [ $stage -eq 160926 ]; then
     ali_dir=exp/tri3_librispeech_ali
     lat_dir=exp/tri3_librispeech_lats
 
-    (
-        sleep 100
-        utils/copy_data_dir.sh ${data_dir} ${data_dir}_hires || exit 1;
-        steps/make_mfcc.sh --mfcc-config conf/mfcc_hires.conf --cmd "$train_cmd" --nj 10 ${data_dir}_hires || exit 1;
-        steps/compute_cmvn_stats.sh ${data_dir}_hires || exit 1;
-    ) &
-    nj=20
-    # steps/align_fmllr.sh --beam 8 --retry-beam 12 --nj $nj ${data_dir} data/lang_librispeech $gmm_dir ${ali_dir} || exit 1;
-    steps/align_fmllr_lats.sh --nj $nj ${data_dir} data/lang_librispeech $gmm_dir $lat_dir || exit 1;
+    # (
+    #     sleep 100
+    #     utils/copy_data_dir.sh ${data_dir} ${data_dir}_hires || exit 1;
+    #     steps/make_mfcc.sh --mfcc-config conf/mfcc_hires.conf --cmd "$train_cmd" --nj 10 ${data_dir}_hires || exit 1;
+    #     steps/compute_cmvn_stats.sh ${data_dir}_hires || exit 1;
+    # ) &
+    # nj=20
+    # # steps/align_fmllr.sh --beam 8 --retry-beam 12 --nj $nj ${data_dir} data/lang_librispeech $gmm_dir ${ali_dir} || exit 1;
+    # steps/align_fmllr_lats.sh --nj $nj ${data_dir} data/lang_librispeech $gmm_dir $lat_dir || exit 1;
 
-    wait
+    # wait
     data_dir=data/librispeech_train
     echo "$0: Combine Data/Ali/Lats"
     combined_data=data/train_combine_librispeech_openasr02_2_hires
     combined_lats=exp/tri3_librispeech_openasr02_2_lats
 
-    utils/data/combine_data.sh --skip-fix false $combined_data ${data_dir}_hires data/openasr-02-2_hires || exit 1;
-    steps/combine_lat_dirs.sh $combined_data $combined_lats $lat_dir exp/tri3_openasr02_2_lats || exit 1;
+    # utils/data/combine_data.sh --skip-fix false $combined_data ${data_dir}_hires data/openasr-02-2_hires || exit 1;
+    # steps/combine_lat_dirs.sh $combined_data $combined_lats $lat_dir exp/tri3_openasr02_2_lats || exit 1;
 
     stage=6
-    mkdir -p $src_vars/../
 cat > $src_vars <<EOF
 train_data_dir=$combined_data
 lat_dir=$combined_lats
@@ -186,12 +180,17 @@ if [ ! -z $src_vars ];then
     echo "Use vars:"
     cat $src_vars
     cp $src_vars $dir
+else
+    cat > $dir/vars <<EOF
+train_data_dir=data/train_combine_data2000$suffix
+lat_dir=$combined_lat_dir
+EOF
 fi
 
 if [ $stage -le 6 ]; then
     if [ ! -f $dir/egs/.done ];then
         mkdir -p $dir/egs
-        bash local/chain/run_tdnn.sh --stage 9 --train-stage -10 --exit-stage 0 --adapt-stage $start_iter --cleanup false \
+        bash local/chain/run_tdnn.sh --stage 9 --train-stage $run_train_stage --exit-stage 0 --adapt-stage $start_iter --cleanup false \
             --gpus "-1 -1 -1 -1" --nnet-jobs 4 --tree-dir $tree_dir \
             --splice-indexes "$splice_indexes" --bottleneck-dim $bottleneck_dim \
             --get-egs-stage $get_egs_stage --egs-opts "$egs_opts" \

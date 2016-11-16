@@ -805,12 +805,6 @@ class FixedAffineComponent: public Component {
  public:
   FixedAffineComponent() { }
 
-  /// Fix updateable AffineComponent
-  FixedAffineComponent(const AffineComponent &affine) {
-    linear_params_ = affine.LinearParams();
-    bias_params_ = affine.BiasParams();
-  }
-
   virtual std::string Type() const { return "FixedAffineComponent"; }
   virtual std::string Info() const;
 

@@ -94,7 +94,8 @@ def Combine(args, opt):
             aidx = combine_numbers.pop()
             if not opt.test:
                 logger.info("Move/Copy {0}/cegs.{1}.ark -> {2}/cegs.{3}.ark".format(args[e], i, combine_egs_dir, aidx))
-            if args[e].find('combine') < 0 or opt.copy:
+
+            if opt.copy:
                 if opt.test:
                     print("cp {0}/cegs.{1}.ark {2}/cegs.{3}.ark".format(args[e], i, combine_egs_dir, aidx))
                 else:

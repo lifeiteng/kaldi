@@ -267,6 +267,7 @@ def VerifyEgsDir(egs_dir, feat_dim, ivector_dim, left_context, right_context):
             raise Exception('There is mismatch between featdim/ivector_dim of the current experiment and the provided egs directory')
 
         if (egs_left_context < left_context) or (egs_right_context < right_context):
+            print("({0} < {1}) or ({2} < {3})".format(egs_left_context, left_context, egs_right_context, right_context))
             raise Exception('The egs have insufficient context')
 
         frames_per_eg = int(open('{0}/info/frames_per_eg'.format(egs_dir)).readline())

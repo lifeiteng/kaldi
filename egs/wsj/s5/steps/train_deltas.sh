@@ -142,7 +142,7 @@ while [ $x -lt $num_iters ]; do
     fi
     $cmd JOB=1:$nj $dir/log/acc.$x.JOB.log \
       gmm-acc-stats-ali  $dir/$x.mdl "$feats" \
-       "ark,s,cs:gunzip -c $dir/ali.*.gz|" $dir/$x.JOB.acc || exit 1;
+       "ark,s,cs:gunzip -c $dir/ali.JOB.gz|" $dir/$x.JOB.acc || exit 1;
     $cmd $dir/log/update.$x.log \
       gmm-est --mix-up=$numgauss --power=$power \
         --write-occs=$dir/$[$x+1].occs $dir/$x.mdl \

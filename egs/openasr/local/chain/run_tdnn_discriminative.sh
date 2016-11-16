@@ -21,6 +21,8 @@ nj=40
 suffix=""
 dir_suffix=""
 graph_dir=exp/chain/tdnn/graph_tg
+rescore=false
+
 srcdir=exp/chain/tdnn_sp
 
 online_ivector_dir=
@@ -52,7 +54,9 @@ extra_right_context=15
 decode_start_epoch=1 # can be used to avoid decoding all epochs, e.g. if we decided to run more.
 decode_iters=""
 decode_nj=12
-decode_sets="telis2-asr-test-data non-native-readaloud native-readaloud"  #"forum  native-readaloud "
+decode_sets="telis2-asr-test-data non-native-readaloud native-readaloud forum"  #"forum  native-readaloud "
+decode_suffix="_peruser"
+
 
 echo "$0 $@"  # Print the command line for logging
 
@@ -217,13 +221,28 @@ if [[ $stage -le 11 &&  ! -z $decode_iters ]]; then
   cmvn_scp=data/train_sp_min1.55_hires/cmvn.scp.sub10k
   for x in $decode_iters; do
       iter=$x
-      local/decode/online_decode.sh --decode-sets "$decode_sets" --decode-nj $decode_nj --graph-dir $graph_dir \
-        --data asr-testsets/eng --decode-iter $iter \
-        --online-cmvn-opts " --online-cmvn true --cmvn-scp $cmvn_scp " \
-        --feat-config "--feature-type mfcc --mfcc-config conf/mfcc_hires_decode.conf"  \
-        --decode-suffix "_peruser" --chain true --scoring-opts "--min-lmwt 5 " \
-        $dir &
-      sleep 50
+      if ! $rescore;then
+        for decode_set in $decode_sets;do
+          local/decode/online_decode.sh --decode-sets "$decode_set" --decode-nj $decode_nj --graph-dir $graph_dir \
+            --data asr-testsets/eng --decode-iter $iter \
+            --online-cmvn-opts " --online-cmvn true --cmvn-scp $cmvn_scp " \
+            --feat-config "--feature-type mfcc --mfcc-config conf/mfcc_hires_decode.conf"  \
+            --decode-suffix "$decode_suffix" --chain true --scoring-opts "--min-lmwt 5 " \
+            $dir &
+          sleep 50
+        done
+      else
+        echo "$0: rescoring"
+        for decode_set in $decode_sets;do
+          src_decode_dir=${dir}_online/decode_${iter}_${decode_set}${decode_suffix}
+          if [ ! -d $src_decode_dir ];then
+            echo "$0: decode dir not exist." && exit 1
+          fi
+          local/decode/lmrescore.sh \
+            --decode-iter $iter asr-testsets/eng/$decode_set $graph_dir $src_decode_dir ${src_decode_dir}_rescore &
+          sleep 50
+        done
+      fi
   done
   wait
 fi

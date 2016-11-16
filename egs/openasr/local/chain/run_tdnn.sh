@@ -85,6 +85,14 @@ final_normalize_target=0.5
 self_repair_scale=0.00001
 mini_batch=128
 
+data=data_fbank_hires
+src_model=exp/tri3
+
+ali_dir=exp/tri3_all_ali
+
+lang=data_fbank_hires/lang_chain
+ivector_dir=""
+
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
 
@@ -109,13 +117,7 @@ if [[ -z $tree_dir || ! -z $tree_suffix ]] ;then
   echo "TreeDir is $tree_dir"
 fi
 
-data=data_fbank_hires
-src_model=exp/tri3
 
-ali_dir=exp/tri3_all_ali
-
-lang=$data/lang_chain
-ivector_dir=""
 
 if [ $stage -le 0 ]; then
   # utils/copy_data_dir.sh data/openasr-01/train data/openasr-01-train

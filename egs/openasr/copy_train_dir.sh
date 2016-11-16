@@ -35,7 +35,9 @@ fi
 
 if $deep;then
     for x in 0.trans_mdl den.fst normalization.fst lda_stats;do
-        cp $src_dir/$x $dir || exit 1;
+        if [ -f $src_dir/$x ];then
+            cp $src_dir/$x $dir || exit 1;
+        fi
     done
 fi
 
