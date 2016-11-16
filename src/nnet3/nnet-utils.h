@@ -33,7 +33,7 @@ namespace kaldi {
 namespace nnet3 {
 
 
-/// \file nnet-utils.h
+/// \file nnet3/nnet-utils.h
 /// This file contains some miscellaneous functions dealing with class Nnet.
 
 /// Given an nnet and a computation request, this function works out which
@@ -148,6 +148,12 @@ void ScaleNnetComponents(const Vector<BaseFloat> &scales,
 /// stored stats).
 void AddNnet(const Nnet &src, BaseFloat alpha, Nnet *dest);
 
+/// Does *dest += alpha * src for updatable components (affect nnet parameters),
+/// and *dest += scale * src for other components (affect stored stats).
+/// Here, alphas is a vector of size equal to the number of updatable components
+void AddNnetComponents(const Nnet &src, const Vector<BaseFloat> &alphas,
+                       BaseFloat scale, Nnet *dest);
+
 /// Returns the total of the number of parameters in the updatable components of
 /// the nnet.
 int32 NumParameters(const Nnet &src);
@@ -177,6 +183,9 @@ void ConvertRepeatedToBlockAffine(Nnet *nnet);
 /// Info() function (we need this in the CTC code).
 std::string NnetInfo(const Nnet &nnet);
 
+/// This function sets the dropout proportion in all dropout component to 
+/// dropout_proportion value.
+void SetDropoutProportion(BaseFloat dropout_proportion, Nnet *nnet);
 
 /// This function finds a list of components that are never used, and outputs
 /// the integer comopnent indexes (you can use these to index
