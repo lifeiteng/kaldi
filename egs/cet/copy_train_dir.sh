@@ -1,0 +1,1 @@
+../openasr/copy_train_dir.sh
