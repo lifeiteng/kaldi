@@ -796,6 +796,8 @@ def Train(args, run_opts):
                               iter = iter,
                               srand = args.srand,
                               egs_dir = egs_dir,
+                              num_iters = num_iters,
+                              pruner_iters = pruner_iters,
                               num_jobs = current_num_jobs,
                               num_archives_processed = num_archives_processed,
                               num_archives = num_archives,

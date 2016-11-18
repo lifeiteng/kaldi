@@ -37,7 +37,6 @@ int32 GetCount(double expected_count) {
   return ans;
 }
 
-<<<<<<< HEAD
 // add artifical Gaussion noise(mean=0.0, var=gauss_sigma) to the MFCC/Fbank features
 void CorruptsNnetChainExampleGaussNoise(NnetChainExample *eg, BaseFloat sigma) {
   std::vector<nnet3::NnetIo> &inputs = eg->inputs;
@@ -51,8 +50,6 @@ void CorruptsNnetChainExampleGaussNoise(NnetChainExample *eg, BaseFloat sigma) {
   }
 }
 
-}
-=======
 void FilterExample(const NnetChainExample &eg,
                    int32 min_input_t,
                    int32 max_input_t,
@@ -210,7 +207,6 @@ void CalculateFrameSubsamplingFactor(const NnetChainExample &eg,
                                      int32 *frame_subsampling_factor) {
   *frame_subsampling_factor = eg.outputs[0].indexes[1].t
                               - eg.outputs[0].indexes[0].t;
->>>>>>> kaldi/master
 }
 
 void ModifyChainExampleContext(const NnetChainExample &eg,
@@ -334,7 +330,7 @@ int main(int argc, char *argv[]) {
           left_context == -1 && right_context == -1) {
         const NnetChainExample &eg = example_reader.Value();
         if (gauss_sigma != 0) {
-          CorruptsNnetChainExampleGaussNoise(&eg, gauss_sigma);
+          CorruptsNnetChainExampleGaussNoise(const_cast<NnetChainExample *>(&eg), gauss_sigma);
         }
         for (int32 c = 0; c < count; c++) {
           int32 index = (random ? Rand() : num_written) % num_outputs;
@@ -342,11 +338,10 @@ int main(int argc, char *argv[]) {
           num_written++;
         }
       } else if (count > 0) {
-        NnetChainExample eg = example_reader.Value();
-        if (gauss_sigma != 0) {
-          CorruptsNnetChainExampleGaussNoise(&eg, gauss_sigma);
-        }
         const NnetChainExample &eg = example_reader.Value();
+        if (gauss_sigma != 0) {
+          CorruptsNnetChainExampleGaussNoise(const_cast<NnetChainExample *>(&eg), gauss_sigma);
+        }
         NnetChainExample eg_out;
         if (left_context != -1 || right_context != -1)
           ModifyChainExampleContext(eg, left_context, right_context,
