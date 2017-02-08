@@ -43,6 +43,10 @@ DecodableNnet3SimpleOnline::DecodableNnet3SimpleOnline(
                "Priors in neural network must match with transition model (if exist).");
 
   ComputeSimpleNnetContext(am_nnet_.GetNnet(), &left_context_, &right_context_);
+  left_context_ += opts_.extra_left_context;
+  right_context_ += opts_.extra_right_context;
+  KALDI_LOG << "Left context is " << left_context_;
+  KALDI_LOG << "Right context is " << right_context_;
   log_priors_.ApplyLog();
 
   // Check that the dimensions are correct.
@@ -58,9 +62,12 @@ DecodableNnet3SimpleOnline::DecodableNnet3SimpleOnline(
               << " of neural network.  Likely the config and neural net "
               << "mismatch.";
   }
+  best_loglikes_.resize(0);
 }
 
-
+const std::vector<BaseFloat> &DecodableNnet3SimpleOnline::BestLogLikes() {
+    return best_loglikes_;
+}
 
 BaseFloat DecodableNnet3SimpleOnline::LogLikelihood(int32 frame, int32 index) {
   ComputeForFrame(frame);
@@ -215,6 +222,11 @@ void DecodableNnet3SimpleOnline::DoNnetComputation(
   scaled_loglikes_.Resize(0, 0);
   // the following statement just swaps the pointers if we're not using a GPU.
   cu_output.Swap(&scaled_loglikes_);
+
+  // update best loglikes
+  for (int32 i = 0; i < scaled_loglikes_.NumRows(); ++i) {
+    best_loglikes_.push_back(scaled_loglikes_.Row(i).Max());
+  }
 }
 
 } // namespace nnet3

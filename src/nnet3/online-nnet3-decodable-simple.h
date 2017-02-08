@@ -40,7 +40,10 @@ struct DecodableNnet3OnlineOptions {
   int32 frame_subsampling_factor;
   BaseFloat acoustic_scale;
   bool pad_input;
+  int32 extra_left_context;
+  int32 extra_right_context;
   int32 max_nnet_batch_size;
+
   NnetComputeOptions compute_config;
   NnetOptimizeOptions optimize_config;
 
@@ -48,6 +51,8 @@ struct DecodableNnet3OnlineOptions {
       frame_subsampling_factor(1),
       acoustic_scale(0.1),
       pad_input(true),
+      extra_left_context(0),
+      extra_right_context(0),
       max_nnet_batch_size(256) { }
 
   void Register(OptionsItf *opts) {
@@ -56,6 +61,11 @@ struct DecodableNnet3OnlineOptions {
     opts->Register("pad-input", &pad_input,
                    "If true, pad acoustic features with required acoustic context "
                    "past edges of file.");
+    opts->Register("extra-left-context", &extra_left_context,
+                   "");
+    opts->Register("extra-right-context", &extra_right_context,
+                   "");
+
     opts->Register("max-nnet-batch-size", &max_nnet_batch_size,
                    "Maximum batch size we use in neural-network decodable object, "
                    "in cases where we are not constrained by currently available "
@@ -91,6 +101,9 @@ class DecodableNnet3SimpleOnline: public DecodableInterface {
                              const DecodableNnet3OnlineOptions &opts,
                              OnlineFeatureInterface *input_feats);
 
+  virtual ~DecodableNnet3SimpleOnline() {
+    KALDI_LOG << "DEBUG!";
+  }
 
   /// Returns the scaled log likelihood
   virtual BaseFloat LogLikelihood(int32 frame, int32 index);
@@ -101,6 +114,8 @@ class DecodableNnet3SimpleOnline: public DecodableInterface {
 
   /// Indices are one-based!  This is for compatibility with OpenFst.
   virtual int32 NumIndices() const { return trans_model_.NumTransitionIds(); }
+
+  virtual const std::vector<BaseFloat> &BestLogLikes();
 
  private:
 

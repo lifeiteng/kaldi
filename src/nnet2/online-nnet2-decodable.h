@@ -114,7 +114,6 @@ class DecodableNnet2Online: public DecodableInterface {
   // at the time we called LogLikelihood(), and will never exceed
   // opts_.max_nnet_batch_size.
   Matrix<BaseFloat> scaled_loglikes_;
-  std::vector<BaseFloat> best_loglikes_;
 
   KALDI_DISALLOW_COPY_AND_ASSIGN(DecodableNnet2Online);
 };

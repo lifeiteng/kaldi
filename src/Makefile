@@ -21,7 +21,7 @@ SUBDIRS_LIB = $(filter-out %bin, $(SUBDIRS))
 
 
 # Optional subdirectories
-EXT_SUBDIRS = online onlinebin  # python-kaldi-decoding
+EXT_SUBDIRS = online # python-kaldi-decoding
 EXT_SUBDIRS_LIB = $(filter-out %bin, $(EXT_SUBDIRS))
 
 include kaldi.mk

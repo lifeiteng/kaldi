@@ -87,6 +87,8 @@ class DecodableInterface {
   /// returns false before calling this.
   virtual BaseFloat LogLikelihood(int32 frame, int32 index) = 0;
 
+  std::vector<BaseFloat> best_loglikes_;
+  virtual const std::vector<BaseFloat> &BestLogLikes() { return best_loglikes_; };
   /// Returns true if this is the last frame.  Frames are zero-based, so the
   /// first frame is zero.  IsLastFrame(-1) will return false, unless the file
   /// is empty (which is a case that I'm not sure all the code will handle, so
